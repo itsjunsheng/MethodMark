@@ -1,0 +1,80 @@
+/* Final reading-size and contrast adjustments, shared across viewport sizes. */
+.panel{min-width:0}
+.nav-item{font-size:12px;color:#727b69}
+.sidebar-bottom>.nav-item{font-size:11px}
+.sidebar-bottom>.nav-item:last-of-type{font-size:10px;gap:10px;white-space:nowrap}
+.nav-label{font-size:9px}
+.workspace-switch strong{font-size:11px}
+.workspace-switch div>span{font-size:9px;max-width:125px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
+.sidebar-note strong{font-size:11px}
+.sidebar-note p{font-size:11px;color:#838e75}
+.sidebar-note button{font-size:10px}
+.profile strong{font-size:12px}
+.profile small{font-size:10px}
+.breadcrumb{font-size:11px}
+.demo-indicator{font-size:10px}
+.page-heading p{font-size:13px;color:#828b79}
+.page-heading .eyebrow{font-size:9px}
+.hero-copy p{font-size:12px;color:#758467}
+.hero-kicker{font-size:8px}
+.hero-footnote{font-size:9px;color:#849574}
+.hero-copy .btn{font-size:11px}
+.section-line h2{font-size:13px}
+.section-line>span{font-size:10px}
+.stat-top{font-size:12px;color:#7e8a71}
+.stat-foot{font-size:10px;color:#8a987b}
+.stat-foot.amber{color:#a48a54}
+.stat-foot.green{color:#718b62}
+.panel-heading h2,.performance-panel h2,.recent-panel .panel-heading h2,.activity-panel .panel-heading h2,.review-summary h2{font-size:14px}
+.panel-heading p,.recent-panel .panel-heading p{font-size:11px;color:#909b82}
+.select-wrap select{font-size:10px;height:32px;color:#7b8a6c}
+.period-select select{font-size:9px;height:30px}
+.chart-score>span{font-size:10px}
+.chart-legend{font-size:9px;color:#879876}
+.chart-container text{fill:#8b9b7c;font-size:9px}
+.review-big>div{font-size:12px;color:#7e8b70}
+.review-breakdown{font-size:11px;color:#7f8f70}
+.review-note>span{font-size:9px;color:#8e9f7b}
+.review-summary>.btn{font-size:11px;min-height:36px}
+.recent-panel .text-link{font-size:10px}
+.recent-panel .assignment-name strong{font-size:11px;max-width:240px}
+.recent-panel .assignment-name small{font-size:9px;color:#95a283}
+.recent-panel td{font-size:10px}
+.recent-panel th{font-size:10px}
+.recent-panel .badge{font-size:9px}
+.recent-panel .table-small{font-size:8px}
+.submission-cell{font-size:10px}
+.activity strong{font-size:11px;color:#697e58}
+.activity p{font-size:10px;color:#8b9c79}
+.activity small{font-size:9px;color:#a0ae8f}
+.activity-footer{font-size:9px}
+.page-footer{font-size:9px}
+th{font-size:11px;color:#8c9b7c}
+td{font-size:12px}
+.assignment-name strong{font-size:12px}
+.assignment-name small{font-size:10px}
+.badge{font-size:10px}
+.paper-meta>span:first-child{font-size:10px}
+.paper-card h3{font-size:15px}
+.paper-card p{font-size:11px;color:#8e9f7d}
+.paper-card-bottom>span{font-size:10px}
+.review-student strong,.review-assignment strong{font-size:12px}
+.review-student>span,.review-assignment>span{font-size:10px;color:#8f9f7f}
+.review-row>.badge{font-size:9px}
+.info-banner p{color:#899c78;font-size:11px}
+.info-banner strong{font-size:13px}
+.class-card h3{font-size:15px}
+.class-card>p{font-size:11px}
+.student-name{font-size:12px}
+.topic-row>div:first-child{font-size:12px}
+.gap-card h3{font-size:14px}
+.gap-card>p,.next-step{font-size:12px}
+.gap-card .text-link{font-size:10px}
+.demo-note{color:#7e906d}
+.modal-header p{color:#859675}
+.field-hint{color:#8b9e7a}
+.hero-copy{min-width:0}
+@media(max-width:1200px){.stat-top{font-size:10px}.stat-foot{font-size:9px}.hero-kicker{font-size:7px}.hero-copy p{font-size:11px}.review-summary h2{font-size:12px}.review-note>span{font-size:8px}.review-breakdown{font-size:10px}.recent-panel .assignment-name strong{font-size:10px;max-width:180px}.recent-panel .badge{font-size:8px}.recent-panel .assignment-name small{font-size:8px}.panel-heading h2,.performance-panel h2{font-size:13px}.paper-card-bottom>span{font-size:9px}.review-assignment strong{font-size:11px}}
+@media(max-width:1000px){.recent-panel .assignment-name strong{max-width:240px}.hero-copy p{font-size:10px}.hero-kicker{font-size:6px}.hero-copy .btn{font-size:10px}.hero-footnote{font-size:8px}.review-summary h2{font-size:11px}.performance-panel h2{font-size:12px}.performance-panel .panel-heading p{font-size:10px}.page-heading p{font-size:12px}.class-card h3{font-size:14px}}
+@media(max-width:760px){.page-heading p{font-size:11px}.hero-kicker{font-size:6px}.hero-copy p{font-size:10px}.panel-heading h2,.performance-panel h2{font-size:12px}.demo-indicator{font-size:9px}.breadcrumb{font-size:10px}.activity p{font-size:9px}.review-summary h2{font-size:11px}.stat-foot{font-size:8px}.stat-top{font-size:9px}}
+@media(max-width:540px){.hero-copy{max-width:100%;padding:25px 21px}.hero-copy h2{font-size:28px;max-width:290px}.hero-copy p{font-size:10px;max-width:240px}.hero-kicker{font-size:5.5px}.hero-card{min-height:287px}.math-illustration{right:-116px;top:100px;opacity:.45;z-index:0}.stat-top{font-size:11px}.stat-foot{font-size:9px}.hero-footnote{font-size:8px}.hero-copy .btn{font-size:10px}.hero-copy .btn>svg{width:14px}.panel-heading h2,.performance-panel h2,.review-summary h2{font-size:13px}.review-note>span{font-size:10px}.review-breakdown{font-size:12px}.activity strong{font-size:12px}.activity p{font-size:11px}.activity small{font-size:10px}.activity-footer{font-size:9px}.recent-panel .panel-heading p{font-size:9px}.recent-panel .assignment-name strong{max-width:180px;font-size:10px}.recent-panel th{font-size:9px}.recent-panel .badge{font-size:8px}.page-footer{font-size:8px}.demo-indicator{font-size:8px}.class-card h3{font-size:13px}.class-card>p{font-size:10px}.info-banner p{font-size:10px}.info-banner strong{font-size:12px}.paper-card h3{font-size:15px}.paper-card-bottom>span{font-size:10px}.review-row>.badge{font-size:8px}.review-student>span{font-size:9px}}

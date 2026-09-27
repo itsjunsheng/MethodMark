@@ -1,0 +1,339 @@
+[
+  {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "subject": "Mathematics",
+    "school_year": 3,
+    "subject_level": "G3",
+    "topics": [
+      "Quadratic equations"
+    ],
+    "difficulty": "medium",
+    "question_content": {
+      "shared_blocks": [],
+      "parts": [
+        {
+          "id": "main",
+          "label": null,
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Solve x\u00b2 \u2212 9 = 0, showing your working."
+            }
+          ]
+        }
+      ]
+    },
+    "solution": {
+      "parts": [
+        {
+          "part_id": "main",
+          "worked_solution": [
+            "(x \u2212 3)(x + 3) = 0",
+            "x = 3 or x = \u22123"
+          ]
+        }
+      ]
+    },
+    "marking_rubric": {
+      "parts": [
+        {
+          "part_id": "main",
+          "marking_points": [
+            {
+              "id": "main_m1",
+              "code": "M1",
+              "max_marks": 1,
+              "criterion": "Uses a valid method, such as factorisation or taking square roots."
+            },
+            {
+              "id": "main_a1",
+              "code": "A1",
+              "max_marks": 1,
+              "criterion": "States both roots: 3 and \u22123."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "10000000-0000-4000-8000-000000000002",
+    "subject": "Mathematics",
+    "school_year": 3,
+    "subject_level": "G3",
+    "topics": [
+      "Linear equations"
+    ],
+    "difficulty": "easy",
+    "question_content": {
+      "shared_blocks": [
+        {
+          "type": "text",
+          "text": "The variables x and y are related by y = 3x + 2."
+        }
+      ],
+      "parts": [
+        {
+          "id": "part_a",
+          "label": "(a)",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Find y when x = 4."
+            }
+          ]
+        },
+        {
+          "id": "part_b",
+          "label": "(b)",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Find x when y = 20."
+            }
+          ]
+        }
+      ]
+    },
+    "solution": {
+      "parts": [
+        {
+          "part_id": "part_a",
+          "worked_solution": [
+            "y = 3(4) + 2",
+            "y = 14"
+          ]
+        },
+        {
+          "part_id": "part_b",
+          "worked_solution": [
+            "20 = 3x + 2",
+            "3x = 18",
+            "x = 6"
+          ]
+        }
+      ]
+    },
+    "marking_rubric": {
+      "parts": [
+        {
+          "part_id": "part_a",
+          "marking_points": [
+            {
+              "id": "a_m1",
+              "code": "M1",
+              "max_marks": 1,
+              "criterion": "Correctly substitutes x = 4."
+            },
+            {
+              "id": "a_a1",
+              "code": "A1",
+              "max_marks": 1,
+              "criterion": "Obtains y = 14."
+            }
+          ]
+        },
+        {
+          "part_id": "part_b",
+          "marking_points": [
+            {
+              "id": "b_m1",
+              "code": "M1",
+              "max_marks": 1,
+              "criterion": "Forms 20 = 3x + 2."
+            },
+            {
+              "id": "b_a1",
+              "code": "A1",
+              "max_marks": 1,
+              "criterion": "Obtains x = 6."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "10000000-0000-4000-8000-000000000003",
+    "subject": "Mathematics",
+    "school_year": 2,
+    "subject_level": "G3",
+    "topics": [
+      "Pythagoras theorem"
+    ],
+    "difficulty": "medium",
+    "question_content": {
+      "shared_blocks": [
+        {
+          "type": "text",
+          "text": "Triangle ABC is right-angled at B. AB = 3 cm and BC = 4 cm."
+        },
+        {
+          "type": "diagram",
+          "format": "svg",
+          "source": "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 110'><path d='M20 20 L20 80 L100 80 Z M20 70 H30 V80' fill='none' stroke='black'/><text x='8' y='18'>A</text><text x='6' y='94'>B</text><text x='104' y='94'>C</text></svg>",
+          "alt_text": "Triangle ABC with AB vertical, BC horizontal, and a right angle at B."
+        }
+      ],
+      "parts": [
+        {
+          "id": "main",
+          "label": null,
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Calculate the length of AC."
+            }
+          ]
+        }
+      ]
+    },
+    "solution": {
+      "parts": [
+        {
+          "part_id": "main",
+          "worked_solution": [
+            "AC\u00b2 = AB\u00b2 + BC\u00b2",
+            "AC\u00b2 = 3\u00b2 + 4\u00b2 = 25",
+            "AC = 5 cm"
+          ]
+        }
+      ]
+    },
+    "marking_rubric": {
+      "parts": [
+        {
+          "part_id": "main",
+          "marking_points": [
+            {
+              "id": "main_m1",
+              "code": "M1",
+              "max_marks": 1,
+              "criterion": "Correctly applies Pythagoras theorem: AC\u00b2 = 3\u00b2 + 4\u00b2."
+            },
+            {
+              "id": "main_a1",
+              "code": "A1",
+              "max_marks": 1,
+              "criterion": "Obtains AC = 5 cm."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "10000000-0000-4000-8000-000000000004",
+    "subject": "Mathematics",
+    "school_year": 2,
+    "subject_level": "G2",
+    "topics": [
+      "Linear equations"
+    ],
+    "difficulty": "easy",
+    "question_content": {
+      "shared_blocks": [],
+      "parts": [
+        {
+          "id": "main",
+          "label": null,
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Solve 3x + 7 = 22."
+            }
+          ]
+        }
+      ]
+    },
+    "solution": {
+      "parts": [
+        {
+          "part_id": "main",
+          "worked_solution": [
+            "3x = 15",
+            "x = 5"
+          ]
+        }
+      ]
+    },
+    "marking_rubric": {
+      "parts": [
+        {
+          "part_id": "main",
+          "marking_points": [
+            {
+              "id": "main_m1",
+              "code": "M1",
+              "max_marks": 1,
+              "criterion": "Subtracts 7 from both sides to obtain 3x = 15."
+            },
+            {
+              "id": "main_a1",
+              "code": "A1",
+              "max_marks": 1,
+              "criterion": "Obtains x = 5."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "id": "10000000-0000-4000-8000-000000000005",
+    "subject": "Mathematics",
+    "school_year": 1,
+    "subject_level": "G1",
+    "topics": [
+      "Percentages"
+    ],
+    "difficulty": "easy",
+    "question_content": {
+      "shared_blocks": [],
+      "parts": [
+        {
+          "id": "main",
+          "label": null,
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Find 20% of 80."
+            }
+          ]
+        }
+      ]
+    },
+    "solution": {
+      "parts": [
+        {
+          "part_id": "main",
+          "worked_solution": [
+            "20 \u00f7 100 \u00d7 80",
+            "16"
+          ]
+        }
+      ]
+    },
+    "marking_rubric": {
+      "parts": [
+        {
+          "part_id": "main",
+          "marking_points": [
+            {
+              "id": "main_m1",
+              "code": "M1",
+              "max_marks": 1,
+              "criterion": "Uses 20 \u00f7 100 \u00d7 80 or an equivalent method."
+            },
+            {
+              "id": "main_a1",
+              "code": "A1",
+              "max_marks": 1,
+              "criterion": "Obtains 16."
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

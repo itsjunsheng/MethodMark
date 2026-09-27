@@ -1,0 +1,28 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+*.local
+*.tsbuildinfo
+
+# Local configuration: ignore every .env file and variant in all directories
+.env*
+
+# Python environments and generated files
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+
+# Local tooling caches
+.uv-cache/
+
+# Local generation pipeline database (SQLite development only)
+*.db
+*.db-journal

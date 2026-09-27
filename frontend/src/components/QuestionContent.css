@@ -1,0 +1,21 @@
+.question-blocks p, .solution-part p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+  margin: 8px 0;
+}
+.question-diagram {
+  display: block;
+  width: 280px;
+  max-width: 100%;
+  height: auto;
+  margin: 16px 0;
+  background: white;
+}
+.question-part + .question-part, .solution-part + .solution-part { margin-top: 18px; }
+.question-part-heading { display: flex; justify-content: space-between; gap: 12px; }
+.question-part-heading span, .question-level { color: #647269; font-size: 12px; }
+.question-level { margin-bottom: 10px; }
+.marking-points { padding-left: 20px; margin: 12px 0 0; }
+.marking-points li { margin: 6px 0; line-height: 1.6; }
+.marking-points span { white-space: nowrap; }

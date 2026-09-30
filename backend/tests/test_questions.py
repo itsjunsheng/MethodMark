@@ -6,6 +6,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.dependencies import require_tutor
 from app.core.config import Settings
 from app.main import create_app
 from app.services.question_bank import QuestionBankError, fetch_questions
@@ -129,7 +130,9 @@ def test_missing_configuration_does_not_contact_supabase():
 def test_sample_endpoint_is_disabled_outside_development(environment, monkeypatch):
     fetch = AsyncMock()
     monkeypatch.setattr("app.api.routes.questions.fetch_questions", fetch)
-    with TestClient(create_app(settings(environment=environment))) as client:
+    app = create_app(settings(environment=environment))
+    app.dependency_overrides[require_tutor] = lambda: "test-tutor"
+    with TestClient(app) as client:
         response = client.get("/api/v1/sample-paper/questions")
     assert response.status_code == 403
     fetch.assert_not_awaited()
@@ -139,7 +142,9 @@ def test_sample_endpoint_returns_validated_questions_without_caching(monkeypatch
     monkeypatch.setattr(
         "app.api.routes.questions.fetch_questions", AsyncMock(return_value=[question()])
     )
-    with TestClient(create_app(settings(environment="development"))) as client:
+    app = create_app(settings(environment="development"))
+    app.dependency_overrides[require_tutor] = lambda: "test-tutor"
+    with TestClient(app) as client:
         response = client.get("/api/v1/sample-paper/questions")
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
@@ -153,7 +158,9 @@ def test_sample_endpoint_translates_service_errors(monkeypatch):
             side_effect=QuestionBankError("Not configured", status_code=503),
         ),
     )
-    with TestClient(create_app(settings(environment="development"))) as client:
+    app = create_app(settings(environment="development"))
+    app.dependency_overrides[require_tutor] = lambda: "test-tutor"
+    with TestClient(app) as client:
         response = client.get("/api/v1/sample-paper/questions")
     assert response.status_code == 503
     assert response.json() == {"detail": "Not configured"}

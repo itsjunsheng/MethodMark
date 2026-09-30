@@ -8,7 +8,7 @@ type QuestionProps = {
   onChange?: (question: Question) => void;
 };
 
-function Blocks({ blocks, onChange }: {
+export function QuestionBlocks({ blocks, onChange }: {
   blocks: ContentBlock[];
   onChange?: (blocks: ContentBlock[]) => void;
 }) {
@@ -35,14 +35,14 @@ export function QuestionPrompt({ question, onChange }: QuestionProps) {
     onChange?.(toPaperQuestion({ ...bank, question_content: content }));
 
   return <div className="bank-question">
-    <Blocks blocks={bank.question_content.shared_blocks} onChange={onChange
+    <QuestionBlocks blocks={bank.question_content.shared_blocks} onChange={onChange
       ? blocks => update({ ...bank.question_content, shared_blocks: blocks }) : undefined} />
     {bank.question_content.parts.map(part => {
       const marks = bank.marking_rubric.parts.find(rubric => rubric.part_id === part.id)
         ?.marking_points.reduce((total, point) => total + point.max_marks, 0) ?? 0;
       return <div className="question-part" key={part.id}>
         {part.label && <div className="question-part-heading"><strong>{part.label}</strong><span>[{marks} marks]</span></div>}
-        <Blocks blocks={part.blocks} onChange={onChange ? blocks => update({
+        <QuestionBlocks blocks={part.blocks} onChange={onChange ? blocks => update({
           ...bank.question_content,
           parts: bank.question_content.parts.map(item => item.id === part.id ? { ...item, blocks } : item),
         }) : undefined} />

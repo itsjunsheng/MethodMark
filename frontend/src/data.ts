@@ -1,8 +1,9 @@
+import type { ItemColour } from './lib/colours';
 import type { BankQuestion } from './types/questionBank';
 
 export type Page = 'Overview' | 'Practice papers' | 'Assignments' | 'Marking queue' | 'Classes & students' | 'Insights' | 'Settings';
-export type Question = { id: string; topic: string; text: string; solution: string; method: number; accuracy: number; bankQuestion?: BankQuestion };
-export type Paper = { id: string; title: string; level: string; subject: string; topics: string[]; difficulty: string; duration: number; questions: Question[]; approved: boolean };
+export type Question = { id: string; topic: string; text: string; solution: string; method: number; accuracy: number; bankQuestion?: BankQuestion; content?: BankQuestion['question_content']; marksByPart?: Record<string, number> };
+export type Paper = { id: string; color?: ItemColour; title: string; level: string; subject: string; topics: string[]; difficulty: string; duration: number; questions: Question[]; approved: boolean; status?: 'draft' | 'reviewed' | 'published' | 'archived'; instructions?: string };
 export type Assignment = { id: string; paperId: string; title: string; className: string; due: string; submitted: number; total: number; status: 'Active' | 'Released' | 'Draft'; review: number; paperSnapshot?: Paper };
 export type Mark = { method: number; accuracy: number; feedback: string; checked: boolean };
 export type Review = { id: string; name: string; code: string; assignmentId: string; flagged: boolean; approved: boolean; marks: Mark[] };
@@ -44,7 +45,9 @@ export const initialPapers: Paper[] = [
   { id: 'p4', title: 'Coordinate geometry checkpoint', level: 'Secondary 3', subject: 'Additional Mathematics', topics: ['Coordinate geometry'], difficulty: 'Balanced', duration: 30, questions: makeQuestions(['Coordinate geometry'], 2), approved: true },
   { id: 'p5', title: 'Statistics: measures of central tendency', level: 'Secondary 3', subject: 'Elementary Mathematics', topics: ['Statistics'], difficulty: 'Balanced', duration: 30, questions: makeQuestions(['Statistics'], 2), approved: true },
   { id: 'p6', title: 'Algebra essentials', level: 'Secondary 3', subject: 'Elementary Mathematics', topics: ['Algebraic expressions'], difficulty: 'Balanced', duration: 30, questions: makeQuestions(['Algebraic expressions'], 2), approved: false },
-];
+].map(paper => ({ ...paper, questions: paper.questions.map((question, index) => ({
+  ...question, id: `${paper.id}-q${index + 1}`,
+})) }));
 export const initialAssignments: Assignment[] = [
   { id: 'MM-QF26', paperId: 'p1', title: initialPapers[0].title, className: classes[0], due: '2026-09-12', submitted: 10, total: 12, status: 'Active', review: 3 },
   { id: 'MM-TR26', paperId: 'p2', title: initialPapers[1].title, className: classes[1], due: '2026-09-13', submitted: 8, total: 12, status: 'Active', review: 2 },

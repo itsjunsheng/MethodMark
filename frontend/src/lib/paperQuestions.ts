@@ -1,3 +1,4 @@
+import { randomColour } from './colours';
 import type { Paper, Question } from '../data';
 import type { BankQuestion, ContentBlock } from '../types/questionBank';
 
@@ -33,13 +34,15 @@ export function questionMarks(question: Question): number {
   return question.bankQuestion
     ? question.bankQuestion.marking_rubric.parts.flatMap(part => part.marking_points)
       .reduce((total, point) => total + point.max_marks, 0)
-    : question.method + question.accuracy;
+    : question.marksByPart ? Object.values(question.marksByPart).reduce((sum, marks) => sum + marks, 0)
+      : question.method + question.accuracy;
 }
 
 export function createSamplePaper(bank: BankQuestion[], title: string, duration: number): Paper {
   const levels = [...new Set(bank.map(question => `Secondary ${question.school_year} (${question.subject_level})`))];
   return {
     id: crypto.randomUUID(),
+    color: randomColour(),
     title: title.trim() || 'Question bank practice',
     level: levels.length === 1 ? levels[0] : 'Mixed levels',
     subject: [...new Set(bank.map(question => question.subject))].join(' / '),

@@ -1,60 +1,67 @@
+import { useToast } from './components/Toast';
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { ArrowDownToLine, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, ClipboardCheck, Clock3, Copy, FileText, FolderOpen, GraduationCap, LayoutDashboard, Link2, Menu, MoreHorizontal, Plus, Search, Settings, ShieldCheck, Sparkles, TrendingUp, Users, X, CircleAlert, RotateCcw, Pencil, CheckCircle2 } from 'lucide-react';
+import type { User } from '@supabase/supabase-js';
+import { workspaceKey } from './lib/workspaceStorage';
+import { ArrowDownToLine, ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, CheckCheck, ChevronDown, ChevronRight, ClipboardCheck, Clock3, FileText, FolderOpen, LayoutDashboard, Menu, Plus, Search, ShieldCheck, Sparkles, TrendingUp, Users, X, CircleAlert, RotateCcw, Pencil, Printer, LogOut, Trash2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { classes, dateLabel, initialAssignments, initialPapers, initialReviews, initials, questionBank, students, topics } from './data';
-import type { Assignment, Mark, Page, Paper, Review } from './data';
-import { fetchQuestions } from './api/questions';
-import { createSamplePaper, questionMarks } from './lib/paperQuestions';
+import { classes, initialAssignments, initialPapers, initialReviews, initials, questionBank, students, topics } from './data';
+import type { Mark, Page, Paper, Review } from './data';
+import { questionMarks } from './lib/paperQuestions';
 import { QuestionPrompt, QuestionSolution } from './components/QuestionContent';
+import { ExamPaper } from './components/ExamPaper';
+import { PaperCard } from './components/PaperCard';
+import { PaperToolbar, PaperToolbarButton } from './components/PaperToolbar';
+import { PaperActionBar } from './components/PaperActionBar';
+import { ColourDialog } from './components/ColourDialog';
+import { DeletePaperDialog } from './components/DeletePaperDialog';
+import { PaperBuilderForm } from './components/PaperBuilderForm';
+import { Modal } from './components/Modal';
+import { ClassesPage } from './components/ClassesPage';
+import { AssignmentsPanel } from './components/AssignmentsPanel';
+import { PublishDialog } from './components/PublishDialog';
+import { listAssignments, listPapers, savePaper, updatePaperColour } from './api/assignments';
+import { useRemoteData } from './lib/useRemoteData';
+import { assignmentStatus } from './lib/assignmentStatus';
 
 function useStored<T,>(key: string, initial: T) {
   const [value, setValue] = useState<T>(() => { try { const saved = localStorage.getItem(key); return saved ? JSON.parse(saved) : initial; } catch { return initial; } });
-  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* The workspace remains usable when storage is unavailable. */ } }, [key, value]);
+  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* The tutor view remains usable when storage is unavailable. */ } }, [key, value]);
   return [value, setValue] as const;
 }
 const navigation: { page: Page; icon: LucideIcon }[] = [{ page: 'Overview', icon: LayoutDashboard }, { page: 'Practice papers', icon: FileText }, { page: 'Assignments', icon: ClipboardCheck }, { page: 'Marking queue', icon: CheckCheck }, { page: 'Classes & students', icon: Users }, { page: 'Insights', icon: ChartNoAxesCombined }];
-const descriptions: Record<Page, string> = { Overview: 'A little less admin. A lot more teaching.', 'Practice papers': 'Thoughtful practice starts with a great paper.', Assignments: 'Every paper, every submission, all in one place.', 'Marking queue': 'AI does the first pass. You have the final say.', 'Classes & students': 'Know your students. Support their next step.', Insights: 'Turn each assessment into a better next lesson.', Settings: 'Make this workspace feel like yours.' };
+const descriptions: Record<Page, string> = { Overview: 'Your teaching at a glance.', 'Practice papers': 'Thoughtful practice starts with a great paper.', Assignments: 'Every paper, every submission, all in one place.', 'Marking queue': 'AI does the first pass. You have the final say.', 'Classes & students': 'Know your students. Support their next step.', Insights: 'Turn each assessment into a better next lesson.', Settings: 'Manage your profile and preferences.' };
 function Button({ children, onClick, variant = 'secondary', className = '', disabled = false, type = 'button' }: { children: ReactNode; onClick?: () => void; variant?: 'primary' | 'secondary' | 'ghost'; className?: string; disabled?: boolean; type?: 'button' | 'submit' }) { return <button type={type} className={`btn ${variant} ${className}`} onClick={onClick} disabled={disabled}>{children}</button>; }
 function Badge({ children, tone = 'green' }: { children: ReactNode; tone?: string }) { return <span className={`badge ${tone}`}><span className="badge-dot" />{children}</span>; }
 function Empty({ title, text }: { title: string; text: string }) { return <div className="empty"><FolderOpen size={32} /><h3>{title}</h3><p>{text}</p></div>; }
-function Modal({ title, subtitle, children, onClose, wide = false }: { title: string; subtitle?: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement; const overflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
-    ref.current?.focus();
-    const handle = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); if (e.key === 'Tab') { const nodes = ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]'); if (!nodes?.length) return; const first = nodes[0]; const last = nodes[nodes.length - 1]; if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); } } };
-    document.addEventListener('keydown', handle); return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', handle); previous?.focus(); };
-  }, []);
-  return <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}><div ref={ref} tabIndex={-1} className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}><div className="modal-header"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button className="icon-btn" aria-label="Close dialog" onClick={onClose}><X size={20} /></button></div>{children}</div></div>;
-}
 
-export default function App() {
+export default function App({ user, onLogout }: { user: User; onLogout: () => Promise<void> }) {
   const [page, setPage] = useState<Page>('Overview');
-  const [papers, setPapers] = useStored<Paper[]>('methodmark-papers-v1', initialPapers);
-  const [assignments, setAssignments] = useStored<Assignment[]>('methodmark-assignments-v1', initialAssignments.map(a => ({ ...a, paperSnapshot: initialPapers.find(p => p.id === a.paperId) })));
-  const [reviews, setReviews] = useStored<Review[]>('methodmark-reviews-v1', initialReviews);
-  const [profile, setProfile] = useStored('methodmark-profile-v1', { name: 'Jun Sheng', workspace: 'My teaching workspace', notifications: true });
+  const paperData = useRemoteData(listPapers);
+  const assignmentData = useRemoteData(listAssignments);
+  const papers = paperData.data ?? [];
+  const [assignmentRevision, setAssignmentRevision] = useState(0);
+  async function persistPaper(paper: Paper) {
+    const saved = await savePaper(paper);
+    paperData.setData(current => [saved, ...(current ?? []).filter(item => item.id !== saved.id)]);
+    return saved;
+  }
+  const [reviews, setReviews] = useStored<Review[]>(workspaceKey(user.id, 'reviews'), initialReviews);
+  const [profile, setProfile] = useStored(workspaceKey(user.id, 'profile'), { name: String(user.user_metadata.name || 'Tutor') });
+  const [loggingOut, setLoggingOut] = useState(false);
   const [mobileNav, setMobileNav] = useState(false);
   const [query, setQuery] = useState('');
   const [classFilter, setClassFilter] = useState('All classes');
-  const [tab, setTab] = useState('All assignments');
-  const [toast, setToast] = useState('');
-  const [modal, setModal] = useState<'create' | 'help' | 'notifications' | 'export' | null>(null);
+  const toast = useToast();
+  const [modal, setModal] = useState<'create' | 'notifications' | 'export' | null>(null);
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
-  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [colourPaper, setColourPaper] = useState<Paper | null>(null);
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
-  const [selectedStudent, setSelectedStudent] = useState<typeof students[number] | null>(null);
   const [publishPaper, setPublishPaper] = useState<Paper | null>(null);
-  const [activeClass, setActiveClass] = useState('All classes');
   const [reviewFilter, setReviewFilter] = useState('Awaiting review');
   const pending = reviews.filter(r => !r.approved);
-  const notify = (message: string) => setToast(message);
-  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 4500); return () => clearTimeout(timer); }, [toast]);
+  const notify = toast.success;
   const navigate = (next: Page) => { setPage(next); setQuery(''); setMobileNav(false); };
-  const visibleAssignments = assignments.filter(a => (classFilter === 'All classes' || a.className === classFilter) && a.title.toLowerCase().includes(query.toLowerCase()) && (tab === 'All assignments' || a.status === tab));
   const exportData = () => {
     const rows = [['Student code', 'Student', 'Class', 'Approved average (%)', 'Improvement (pp)', 'Learning focus'], ...students.filter(s => classFilter === 'All classes' || s.className === classFilter).map(s => [s.id, s.name, s.className, s.score, s.change, s.gap])];
     const csv = rows.map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(',')).join('\r\n');
@@ -62,56 +69,59 @@ export default function App() {
   };
   const releaseReview = (review: Review) => {
     setReviews(all => all.map(r => r.id === review.id ? { ...review, approved: true } : r));
-    setAssignments(all => all.map(a => a.id === review.assignmentId ? { ...a, review: Math.max(0, a.review - 1) } : a));
     setSelectedReview(null); notify(`${review.name}’s result is approved and released in this demo.`);
   };
-  const copyLink = async (assignment: Assignment) => {
-    try { await navigator.clipboard.writeText(`${window.location.origin}/?assignment=${assignment.id}`); notify('Preview link copied. It works with data in this browser.'); } catch { notify('Clipboard unavailable. Select and copy the link in assignment details.'); }
-  };
-  const linkId = new URLSearchParams(window.location.search).get('assignment');
-  if (linkId) return <StudentPreview assignment={assignments.find(a => a.id === linkId)} paper={assignments.find(a => a.id === linkId)?.paperSnapshot ?? papers.find(p => p.id === assignments.find(a => a.id === linkId)?.paperId)} />;
   return <div className="app-shell">
     {mobileNav && <button aria-label="Close navigation" className="nav-scrim" onClick={() => setMobileNav(false)} />}
-    <aside className={`sidebar ${mobileNav ? 'open' : ''}`}>
+    <aside id="tutor-navigation" className={`sidebar ${mobileNav ? 'open' : ''}`}>
       <a className="brand" href="#" onClick={e => { e.preventDefault(); navigate('Overview'); }}><span className="brand-mark"><svg viewBox="0 0 32 32" fill="none"><path d="M6 24V10l10 9 10-9v14M13 10l4 4 8-9" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg></span><span>MethodMark<span className="brand-period">.</span></span></a>
-      <div className="workspace-switch" title={profile.workspace}><span className="workspace-icon"><GraduationCap size={19} /></span><div><strong>Tutor workspace</strong><span>{profile.workspace}</span></div></div>
-      <p className="nav-label">WORKSPACE</p>
       <nav>{navigation.map(({ page: item, icon: Icon }) => <button key={item} aria-label={item} aria-current={page === item ? 'page' : undefined} className={`nav-item ${page === item ? 'active' : ''}`} onClick={() => navigate(item)}><Icon size={19} strokeWidth={1.7} /><span>{item}</span>{item === 'Marking queue' && pending.length > 0 && <span className="nav-count">{pending.length}</span>}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="sidebar-note"><span className="note-icon"><Sparkles size={18} /></span><strong>More teaching. Less marking.</strong><p>A little AI assistance.<br />Your expertise, always.</p><button onClick={() => setModal('help')}>Meet your workspace <ArrowUpRight size={14} /></button></div><button className={`nav-item ${page === 'Settings' ? 'active' : ''}`} onClick={() => navigate('Settings')}><Settings size={19} strokeWidth={1.7} />Settings</button><button className="nav-item" onClick={() => setModal('help')}><CircleHelp size={19} strokeWidth={1.7} />Help & getting started <ArrowUpRight size={14} className="push" /></button><button className="profile" onClick={() => navigate('Settings')}><span className="avatar profile-avatar">{initials(profile.name)}</span><span><strong>{profile.name}</strong><small>Mathematics tutor</small></span><MoreHorizontal size={19} /></button></div>
+      <div className="sidebar-account">
+        <button className="profile" aria-label="Open profile settings" title={profile.name} onClick={() => navigate('Settings')}><span className="avatar profile-avatar">{initials(profile.name)}</span><span className="profile-copy"><strong>{profile.name}</strong><small>Mathematics tutor</small></span></button>
+        <button className="icon-btn notification-btn" aria-label="Notifications" title="Notifications" onClick={() => { setMobileNav(false); setModal('notifications'); }}><Bell size={19} /><i aria-hidden="true" /></button>
+      </div>
     </aside>
-    <div className="main-shell"><header className="topbar"><div className="breadcrumb"><button className="icon-btn mobile-menu" aria-label="Open navigation" onClick={() => setMobileNav(true)}><Menu size={20} /></button><span>Workspace</span><ChevronRight size={13} /><strong>{page}</strong></div><div className="topbar-right"><span className="demo-indicator"><span />Demo workspace</span><span className="topbar-divider" /><button className="icon-btn notification-btn" aria-label="Notifications" onClick={() => setModal('notifications')}><Bell size={19} /><i /></button><button className="avatar top-avatar" aria-label="Open profile settings" onClick={() => navigate('Settings')}>{initials(profile.name)}</button></div></header>
-    <main><div className="page-heading"><div>{page === 'Overview' && <div className="eyebrow">THURSDAY, 10 SEPTEMBER 2026</div>}<h1>{page === 'Overview' ? `Good morning, ${profile.name.split(' ')[0]}` : page}{page === 'Overview' && <span className="greeting-dot">.</span>}</h1><p>{descriptions[page]}</p></div><div className="heading-actions">{page === 'Overview' ? <Button onClick={() => setModal('export')}><ArrowDownToLine size={16} />Export report</Button> : page === 'Insights' ? <Button onClick={exportData}><ArrowDownToLine size={16} />Export report</Button> : null}{!['Marking queue', 'Classes & students', 'Settings', 'Insights'].includes(page) && <Button variant="primary" onClick={() => setModal('create')}><Plus size={17} />Create practice paper</Button>}</div></div>
+    <div className="main-shell">
+    <main><button className="icon-btn mobile-menu" aria-label="Open navigation" aria-controls="tutor-navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu size={20} /></button><div className="page-heading"><div>{page === 'Overview' && <div className="eyebrow">THURSDAY, 10 SEPTEMBER 2026</div>}<h1>{page === 'Overview' ? `Good morning, ${profile.name.split(' ')[0]}` : page}{page === 'Overview' && <span className="greeting-dot">.</span>}</h1><p>{descriptions[page]}</p></div><div className="heading-actions">{page === 'Overview' ? <Button onClick={() => setModal('export')}><ArrowDownToLine size={16} />Export report</Button> : page === 'Insights' ? <Button onClick={exportData}><ArrowDownToLine size={16} />Export report</Button> : null}{!['Marking queue', 'Classes & students', 'Settings', 'Insights'].includes(page) && <Button variant="primary" onClick={() => setModal('create')}><Plus size={17} />Create practice paper</Button>}</div></div>
 
     {page === 'Overview' && <>
       <section className="hero-card"><div className="hero-copy"><span className="hero-kicker"><span className="tiny-spark"><Sparkles size={13} /></span>YOUR TEACHING, WITH A LITTLE SUPERPOWER</span><h2>Less time marking.<br />More lightbulb moments.</h2><p>From the first question to the final method mark.<br className="desktop-break" /> Give every student the attention they deserve.</p><Button variant="primary" onClick={() => setModal('create')}><Sparkles size={16} />Create a paper with AI<ArrowRight size={16} /></Button><span className="hero-footnote">Syllabus-aligned. Reviewed by you.</span></div><MathIllustration /></section>
-      <div className="section-line"><h2>Your workspace at a glance</h2><span><span className="live-dot" />This week <span className="muted">· 7–13 Sep</span></span></div>
-      <section className="stats-grid"><Stat icon={BookOpen} label="Active assignments" value={String(assignments.filter(a => a.status === 'Active').length)} foot="Across your 4 classes" mini="papers" /><Stat icon={Users} label="Students" value="48" foot="Learning, one step at a time" mini="students" /><Stat icon={ClipboardCheck} label="Awaiting review" value={String(pending.length)} foot={`${pending.filter(r => r.flagged).length} flagged for a closer look`} tone="amber" action={() => navigate('Marking queue')} /><Stat icon={TrendingUp} label="Class average" value={`${Math.round(students.reduce((sum, s) => sum + s.score, 0) / students.length)}%`} foot="+6 pts from last month" tone="green" mini="chart" /></section>
+      <div className="section-line"><h2>At a glance</h2><span><span className="live-dot" />This week <span className="muted">· 7–13 Sep</span></span></div>
+      <section className="stats-grid"><Stat icon={BookOpen} label="Active assignments" value={String((assignmentData.data ?? []).filter(a => assignmentStatus(a) === 'Published').length)} foot="Open for submissions" mini="papers" /><Stat icon={Users} label="Students" value="48" foot="Learning, one step at a time" mini="students" /><Stat icon={ClipboardCheck} label="Awaiting review" value={String(pending.length)} foot={`${pending.filter(r => r.flagged).length} flagged for a closer look`} tone="amber" action={() => navigate('Marking queue')} /><Stat icon={TrendingUp} label="Class average" value={`${Math.round(students.reduce((sum, s) => sum + s.score, 0) / students.length)}%`} foot="+6 pts from last month" tone="green" mini="chart" /></section>
       <div className="dashboard-middle"><PerformanceChart classFilter={classFilter} setClassFilter={setClassFilter} /><section className="panel review-summary"><div className="panel-heading"><h2>A little attention needed</h2><span className="soft-icon amber"><ClipboardCheck size={17} /></span></div><div className="review-big"><strong>{pending.length}</strong><div>submissions ready<br /><span>for your review</span></div></div><div className="review-breakdown"><span><i className="legend-dot green-dot" />Ready to check</span><strong>{pending.filter(r => !r.flagged).length}</strong></div><div className="review-breakdown"><span><i className="legend-dot amber-dot" />Flagged by AI</span><strong>{pending.filter(r => r.flagged).length}</strong></div><div className="review-note"><ShieldCheck size={16} /><span>Your approval. Their next step.<br />Results stay private until you release them.</span></div><Button variant="primary" onClick={() => navigate('Marking queue')}>Let’s review<ArrowRight size={16} /></Button></section></div>
-      <div className="dashboard-bottom"><section className="panel recent-panel"><div className="panel-heading"><div><h2>Recent assignments</h2><p>A quick look at how things are coming along.</p></div><button className="text-link" onClick={() => navigate('Assignments')}>View all<ArrowRight size={15} /></button></div><AssignmentTable assignments={assignments.slice(0, 4)} onSelect={setSelectedAssignment} compact /></section><section className="panel activity-panel"><div className="panel-heading"><h2>Latest activity</h2><span className="soft-icon"><Clock3 size={17} /></span></div><div className="timeline">{reviews.filter(r => r.approved).slice(-1).map(r => <Activity key={r.id} icon={Check} title={`${r.name}’s results released`} detail="Approved by you" time="Just now" tone="green" />)}<Activity icon={ClipboardCheck} title="New submissions are in" detail="Quadratic equations & functions" time="12 minutes ago" tone="green" /><Activity icon={Sparkles} title="AI marking complete" detail="Trigonometry · 2 ready to review" time="38 minutes ago" tone="purple" /><Activity icon={Check} title="Results released" detail="Statistics · Sec 3 E-Math" time="Yesterday, 4:30 pm" tone="blue" /></div><div className="activity-footer"><span className="live-dot" />You’re making progress. So are they.</div></section></div>
+      <div className="dashboard-bottom"><AssignmentsPanel key={assignmentRevision} compact /><section className="panel activity-panel"><div className="panel-heading"><h2>Latest activity</h2><span className="soft-icon"><Clock3 size={17} /></span></div><div className="timeline">{reviews.filter(r => r.approved).slice(-1).map(r => <Activity key={r.id} icon={Check} title={`${r.name}’s results released`} detail="Approved by you" time="Just now" tone="green" />)}<Activity icon={ClipboardCheck} title="New submissions are in" detail="Quadratic equations & functions" time="12 minutes ago" tone="green" /><Activity icon={Sparkles} title="AI marking complete" detail="Trigonometry · 2 ready to review" time="38 minutes ago" tone="purple" /><Activity icon={Check} title="Results released" detail="Statistics · Sec 3 E-Math" time="Yesterday, 4:30 pm" tone="blue" /></div><div className="activity-footer"><span className="live-dot" />You’re making progress. So are they.</div></section></div>
       <footer className="page-footer"><span>Made for the way you teach.</span><span><ShieldCheck size={13} />You’re always in control of the final mark.</span></footer>
     </>}
 
-    {page === 'Practice papers' && <><div className="toolbar"><SearchField query={query} setQuery={setQuery} placeholder="Search your papers…" /><span className="muted">{papers.length} papers in your library</span></div><div className="paper-grid">{papers.filter(p => p.title.toLowerCase().includes(query.toLowerCase())).map((p, i) => <button className="panel paper-card" key={p.id} onClick={() => setSelectedPaper(p)}><div className={`paper-cover cover-${i % 4}`}><span className="paper-symbol">{['ƒ(x)', 'sin θ', 'dy/dx', '(x, y)'][i % 4]}</span><FileText size={25} /><span className="cover-label">METHODMARK PRACTICE SERIES</span></div><div className="paper-card-body"><div className="paper-meta"><span>{p.level} · {p.subject.startsWith('Additional') ? 'A-Math' : 'E-Math'}</span><Badge tone={p.approved ? 'green' : 'gray'}>{p.approved ? 'Reviewed' : 'Draft'}</Badge></div><h3>{p.title}</h3><p>{p.topics.join(' · ')}</p><div className="paper-card-bottom"><span><FileText size={14} />{p.questions.length} questions</span><span><Clock3 size={14} />{p.duration} min</span><ArrowUpRight size={17} /></div></div></button>)}</div>{!papers.some(p => p.title.toLowerCase().includes(query.toLowerCase())) && <Empty title="No papers found" text="Try a different title, or create a new practice paper." />}</>}
+    {page === 'Practice papers' && <><div className="toolbar"><SearchField query={query} setQuery={setQuery} placeholder="Search your papers…" /><span className="muted">{papers.length} {papers.length === 1 ? 'paper' : 'papers'} in your library</span></div><div>{paperData.loading && <p role="status">Loading papers...</p>}{paperData.error && <div className="class-load-error"><p>Unable to load your papers.</p><Button onClick={paperData.reload}>Try again</Button></div>}</div><div className="paper-grid">{papers.filter(p => p.title.toLowerCase().includes(query.toLowerCase())).map(p => <PaperCard key={p.id} paper={p} onOpen={() => setSelectedPaper(p)}
+      onColour={() => setColourPaper(p)} />)}</div>{!paperData.loading && !paperData.error && !papers.some(p => p.title.toLowerCase().includes(query.toLowerCase())) && <Empty title="No papers found" text="Try a different title, or create a new practice paper." />}</>}
 
-    {page === 'Assignments' && <section className="panel"><div className="tabs">{['All assignments', 'Active', 'Released'].map(t => <button key={t} className={tab === t ? 'selected' : ''} onClick={() => setTab(t)}>{t}<span>{assignments.filter(a => t === 'All assignments' || a.status === t).length}</span></button>)}</div><div className="toolbar inset"><SearchField query={query} setQuery={setQuery} placeholder="Search assignments…" /><ClassSelect value={classFilter} onChange={setClassFilter} /></div><AssignmentTable assignments={visibleAssignments} onSelect={setSelectedAssignment} />{visibleAssignments.length === 0 && <Empty title="No assignments here yet" text="Publish a reviewed practice paper to get started, or adjust your filters." />}<div className="table-footer">Showing {visibleAssignments.length} assignments<span>All times in Singapore time (SGT)</span></div></section>}
+    {page === 'Assignments' && <AssignmentsPanel key={assignmentRevision} />}
 
-    {page === 'Marking queue' && <><div className="info-banner"><ShieldCheck size={21} /><div><strong>Every mark has your expertise behind it.</strong><p>Review the working, adjust method and accuracy marks, then approve and release.</p></div><Badge tone="amber">{pending.filter(r => r.flagged).length} flagged</Badge></div><section className="panel"><div className="tabs">{['Awaiting review', 'Flagged', 'Released'].map(t => <button key={t} className={reviewFilter === t ? 'selected' : ''} onClick={() => setReviewFilter(t)}>{t}<span>{reviews.filter(r => t === 'Released' ? r.approved : !r.approved && (t !== 'Flagged' || r.flagged)).length}</span></button>)}</div><div className="toolbar inset"><SearchField query={query} setQuery={setQuery} placeholder="Search students or papers…" /><ClassSelect value={classFilter} onChange={setClassFilter} /></div><div className="review-list">{reviews.filter(r => (reviewFilter === 'Released' ? r.approved : !r.approved && (reviewFilter !== 'Flagged' || r.flagged)) && (classFilter === 'All classes' || assignments.find(a => a.id === r.assignmentId)?.className === classFilter) && `${r.name} ${assignments.find(a => a.id === r.assignmentId)?.title}`.toLowerCase().includes(query.toLowerCase())).map(r => <div key={r.id} className="review-row"><span className={`avatar ${r.flagged ? 'peach-avatar' : ''}`}>{initials(r.name)}</span><div className="review-student"><strong>{r.name}</strong><span>{r.code} · {assignments.find(a => a.id === r.assignmentId)?.className}</span></div><div className="review-assignment"><strong>{assignments.find(a => a.id === r.assignmentId)?.title}</strong><span>Handwritten submission · {r.marks.length} questions</span></div><Badge tone={r.approved ? 'green' : r.flagged ? 'amber' : 'blue'}>{r.approved ? 'Released' : r.flagged ? 'Needs a closer look' : 'Ready to review'}</Badge><Button onClick={() => setSelectedReview(r)}>{r.approved ? 'View result' : 'Review'}<ArrowRight size={15} /></Button></div>)}</div>{reviews.filter(r => (reviewFilter === 'Released' ? r.approved : !r.approved && (reviewFilter !== 'Flagged' || r.flagged)) && (classFilter === 'All classes' || assignments.find(a => a.id === r.assignmentId)?.className === classFilter) && `${r.name} ${assignments.find(a => a.id === r.assignmentId)?.title}`.toLowerCase().includes(query.toLowerCase())).length === 0 && <Empty title="All clear here" text="No submissions match this view. Try another filter." />}</section></>}
+    {page === 'Marking queue' && <><div className="info-banner"><ShieldCheck size={21} /><div><strong>Every mark has your expertise behind it.</strong><p>Review the working, adjust method and accuracy marks, then approve and release.</p></div><Badge tone="amber">{pending.filter(r => r.flagged).length} flagged</Badge></div><section className="panel"><div className="tabs">{['Awaiting review', 'Flagged', 'Released'].map(t => <button key={t} className={reviewFilter === t ? 'selected' : ''} onClick={() => setReviewFilter(t)}>{t}<span>{reviews.filter(r => t === 'Released' ? r.approved : !r.approved && (t !== 'Flagged' || r.flagged)).length}</span></button>)}</div><div className="toolbar inset"><SearchField query={query} setQuery={setQuery} placeholder="Search students or papers…" /><ClassSelect value={classFilter} onChange={setClassFilter} /></div><div className="review-list">{reviews.filter(r => (reviewFilter === 'Released' ? r.approved : !r.approved && (reviewFilter !== 'Flagged' || r.flagged)) && (classFilter === 'All classes' || initialAssignments.find(a => a.id === r.assignmentId)?.className === classFilter) && `${r.name} ${initialAssignments.find(a => a.id === r.assignmentId)?.title}`.toLowerCase().includes(query.toLowerCase())).map(r => <div key={r.id} className="review-row"><span className={`avatar ${r.flagged ? 'peach-avatar' : ''}`}>{initials(r.name)}</span><div className="review-student"><strong>{r.name}</strong><span>{r.code} · {initialAssignments.find(a => a.id === r.assignmentId)?.className}</span></div><div className="review-assignment"><strong>{initialAssignments.find(a => a.id === r.assignmentId)?.title}</strong><span>Handwritten submission · {r.marks.length} questions</span></div><Badge tone={r.approved ? 'green' : r.flagged ? 'amber' : 'blue'}>{r.approved ? 'Released' : r.flagged ? 'Needs a closer look' : 'Ready to review'}</Badge><Button onClick={() => setSelectedReview(r)}>{r.approved ? 'View result' : 'Review'}<ArrowRight size={15} /></Button></div>)}</div>{reviews.filter(r => (reviewFilter === 'Released' ? r.approved : !r.approved && (reviewFilter !== 'Flagged' || r.flagged)) && (classFilter === 'All classes' || initialAssignments.find(a => a.id === r.assignmentId)?.className === classFilter) && `${r.name} ${initialAssignments.find(a => a.id === r.assignmentId)?.title}`.toLowerCase().includes(query.toLowerCase())).length === 0 && <Empty title="All clear here" text="No submissions match this view. Try another filter." />}</section></>}
 
-    {page === 'Classes & students' && <><div className="class-grid">{classes.map((c, i) => <button key={c} onClick={() => setActiveClass(activeClass === c ? 'All classes' : c)} className={`panel class-card ${activeClass === c ? 'chosen' : ''}`}><span className={`soft-icon class-icon color-${i}`}><GraduationCap size={22} /></span><h3>{c}</h3><p>12 students<span>2026</span></p><div className="class-card-foot">View class<ArrowUpRight size={16} /></div></button>)}</div><section className="panel"><div className="panel-heading"><h2>{activeClass === 'All classes' ? 'All students' : activeClass}</h2><span className="muted">{activeClass === 'All classes' ? '48' : '12'} students</span></div><div className="toolbar inset"><SearchField query={query} setQuery={setQuery} placeholder="Search by name or student code…" /><ClassSelect value={activeClass} onChange={setActiveClass} /></div><div className="table-scroll"><table><thead><tr><th>Student</th><th>Student code</th><th>Class</th><th>Approved average</th><th>Progress</th><th /></tr></thead><tbody>{students.filter(s => (activeClass === 'All classes' || s.className === activeClass) && `${s.name} ${s.id}`.toLowerCase().includes(query.toLowerCase())).map(s => <tr key={s.id}><td><button className="student-name" onClick={() => setSelectedStudent(s)}><span className="avatar small-avatar">{initials(s.name)}</span>{s.name}</button></td><td><code>{s.id}</code></td><td>{s.className}</td><td><strong>{s.score}%</strong></td><td><span className="positive"><TrendingUp size={14} />+{s.change} pts</span></td><td><button className="icon-btn" aria-label={`View ${s.name}`} onClick={() => setSelectedStudent(s)}><ChevronRight size={17} /></button></td></tr>)}</tbody></table></div>{!students.some(s => (activeClass === 'All classes' || s.className === activeClass) && `${s.name} ${s.id}`.toLowerCase().includes(query.toLowerCase())) && <Empty title="No students found" text="Try a different name or student code." />}</section></>}
+    {page === 'Classes & students' && <ClassesPage />}
 
-    {page === 'Insights' && <><div className="info-banner"><ChartNoAxesCombined size={22} /><div><strong>A clearer picture of progress.</strong><p>Performance insights use tutor-approved results only. Historical figures are sample data.</p></div><ClassSelect value={classFilter} onChange={setClassFilter} /></div><div className="insights-grid"><PerformanceChart classFilter={classFilter} setClassFilter={setClassFilter} /><section className="panel topic-panel"><div className="panel-heading"><div><h2>Topic confidence</h2><p>Where understanding is taking shape.</p></div></div>{topics.slice(0, 5).map((t, i) => { const score = [84, 76, 58, 71, 89][i] + (classFilter === 'All classes' ? 0 : classes.indexOf(classFilter) * 2 - 3); return <div className="topic-row" key={t}><div><span>{t}</span><strong>{score}%</strong></div><div className="progress-track"><span style={{ width: `${score}%`, background: score < 65 ? '#c59962' : '#759c89' }} /></div></div>; })}</section></div><section className="panel"><div className="panel-heading"><div><h2>Small gaps. Meaningful next steps.</h2><p>Common mistakes from approved sample assessments.</p></div><span className="soft-icon"><Sparkles size={18} /></span></div><div className="gap-grid">{[{ title: 'Signs during factorisation', topic: 'Quadratic equations', count: 7, detail: 'Correct factors, but a sign is lost when finding the roots.', action: 'Practise checking roots by substitution.' }, { title: 'Choosing a trig ratio', topic: 'Trigonometry', count: 9, detail: 'Opposite and adjacent sides are mixed up before choosing a ratio.', action: 'Label the sides relative to the given angle first.' }, { title: 'Gradient vs. y-intercept', topic: 'Coordinate geometry', count: 5, detail: 'The gradient is correct, but the constant term is missed.', action: 'Substitute one point into y = mx + c.' }].map(g => <div className="gap-card" key={g.title}><span className="eyebrow">{g.topic}</span><h3>{g.title}</h3><Badge tone="amber">{classFilter === 'All classes' ? g.count : Math.ceil(g.count / 4)} students need support</Badge><p>{g.detail}</p><div className="next-step"><Sparkles size={16} />{g.action}</div><button className="text-link" onClick={() => { setActiveClass(classFilter); navigate('Classes & students'); }}>Explore student progress<ArrowRight size={14} /></button></div>)}</div></section></>}
+    {page === 'Insights' && <><div className="info-banner"><ChartNoAxesCombined size={22} /><div><strong>A clearer picture of progress.</strong><p>Performance insights use tutor-approved results only. Historical figures are sample data.</p></div><ClassSelect value={classFilter} onChange={setClassFilter} /></div><div className="insights-grid"><PerformanceChart classFilter={classFilter} setClassFilter={setClassFilter} /><section className="panel topic-panel"><div className="panel-heading"><div><h2>Topic confidence</h2><p>Where understanding is taking shape.</p></div></div>{topics.slice(0, 5).map((t, i) => { const score = [84, 76, 58, 71, 89][i] + (classFilter === 'All classes' ? 0 : classes.indexOf(classFilter) * 2 - 3); return <div className="topic-row" key={t}><div><span>{t}</span><strong>{score}%</strong></div><div className="progress-track"><span style={{ width: `${score}%`, background: score < 65 ? '#c59962' : '#759c89' }} /></div></div>; })}</section></div><section className="panel"><div className="panel-heading"><div><h2>Small gaps. Meaningful next steps.</h2><p>Common mistakes from approved sample assessments.</p></div><span className="soft-icon"><Sparkles size={18} /></span></div><div className="gap-grid">{[{ title: 'Signs during factorisation', topic: 'Quadratic equations', count: 7, detail: 'Correct factors, but a sign is lost when finding the roots.', action: 'Practise checking roots by substitution.' }, { title: 'Choosing a trig ratio', topic: 'Trigonometry', count: 9, detail: 'Opposite and adjacent sides are mixed up before choosing a ratio.', action: 'Label the sides relative to the given angle first.' }, { title: 'Gradient vs. y-intercept', topic: 'Coordinate geometry', count: 5, detail: 'The gradient is correct, but the constant term is missed.', action: 'Substitute one point into y = mx + c.' }].map(g => <div className="gap-card" key={g.title}><span className="eyebrow">{g.topic}</span><h3>{g.title}</h3><Badge tone="amber">{classFilter === 'All classes' ? g.count : Math.ceil(g.count / 4)} students need support</Badge><p>{g.detail}</p><div className="next-step"><Sparkles size={16} />{g.action}</div><button className="text-link" onClick={() => { navigate('Classes & students'); }}>Explore student progress<ArrowRight size={14} /></button></div>)}</div></section></>}
 
-    {page === 'Settings' && <section className="panel settings-panel"><div className="panel-heading"><div><h2>Workspace preferences</h2><p>Saved in this browser for your next visit.</p></div></div><form onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const form = new FormData(e.currentTarget); setProfile({ ...profile, name: String(form.get('name')).trim() || profile.name, workspace: String(form.get('workspace')).trim() || profile.workspace }); notify('Workspace preferences saved.'); }}><label>Your name<input name="name" defaultValue={profile.name} required maxLength={50} /></label><label>Workspace name<input name="workspace" defaultValue={profile.workspace} required maxLength={80} /></label><div className="setting-detail"><span><strong>Curriculum</strong><small>Singapore secondary mathematics</small></span><Badge>Secondary 1–4</Badge></div><div className="setting-detail"><span><strong>Time zone</strong><small>Assignment deadlines and activity timestamps</small></span><span>Asia/Singapore (GMT+8)</span></div><div className="setting-detail"><span><strong>Tutor approval</strong><small>Required before results can be released</small></span><ShieldCheck size={21} className="green-text" /></div><Button type="submit" variant="primary">Save preferences<Check size={16} /></Button></form></section>}
+    {page === 'Settings' && <section className="panel settings-panel"><div className="panel-heading"><div><h2>Profile & preferences</h2><p>Saved in this browser for your next visit.</p></div></div><form onSubmit={(e: FormEvent<HTMLFormElement>) => { e.preventDefault(); const form = new FormData(e.currentTarget); setProfile({ name: String(form.get('name')).trim() || profile.name }); notify('Preferences saved.'); }}><label>Your name<input name="name" defaultValue={profile.name} required maxLength={50} /></label><div className="setting-detail"><span><strong>Curriculum</strong><small>Singapore secondary mathematics</small></span><Badge>Secondary 1–4</Badge></div><div className="setting-detail"><span><strong>Time zone</strong><small>Assignment deadlines and activity timestamps</small></span><span>Asia/Singapore (GMT+8)</span></div><div className="setting-detail"><span><strong>Tutor approval</strong><small>Required before results can be released</small></span><ShieldCheck size={21} className="green-text" /></div><Button type="submit" variant="primary">Save preferences<Check size={16} /></Button></form><div className="settings-account"><div><strong>Account</strong><p>Sign out of your tutor account.</p></div><Button disabled={loggingOut} onClick={() => { setLoggingOut(true); void onLogout(); }}><LogOut size={16} />{loggingOut ? 'Logging out...' : 'Log out'}</Button></div></section>}
     </main></div>
-    {toast && <div className="toast" role="status"><CheckCircle2 size={19} /><span>{toast}</span><button aria-label="Dismiss notification" onClick={() => setToast('')}><X size={16} /></button></div>}
-    {modal === 'create' && <PaperBuilder onClose={() => setModal(null)} onSave={p => { setPapers(all => [p, ...all]); setModal(null); setSelectedPaper(p); notify('Sample paper created. Review the questions and rubric before publishing.'); }} />}
-    {selectedPaper && <PaperDetail paper={selectedPaper} onClose={() => setSelectedPaper(null)} onSave={p => { setPapers(all => all.map(x => x.id === p.id ? p : x)); setSelectedPaper(p); notify('Paper and rubric saved.'); }} onPublish={p => { setSelectedPaper(null); setPublishPaper(p); }} />}
-    {publishPaper && <PublishDialog paper={publishPaper} onClose={() => setPublishPaper(null)} onPublish={a => { setAssignments(all => [a, ...all]); setPublishPaper(null); setSelectedAssignment(a); notify('Assignment published in this demo. Your preview link is ready.'); }} />}
-    {selectedAssignment && <Modal title={selectedAssignment.title} subtitle={`${selectedAssignment.className} · Due ${dateLabel(selectedAssignment.due)}`} onClose={() => setSelectedAssignment(null)}><div className="modal-body"><div className="assignment-summary"><Badge>{selectedAssignment.status}</Badge><span>{selectedAssignment.submitted} of {selectedAssignment.total} submitted</span></div><div className="progress-track large"><span style={{ width: `${selectedAssignment.submitted / selectedAssignment.total * 100}%` }} /></div><h3 className="spaced-title">Student access link</h3><p className="muted">Students use their student code. No account needed.</p><div className="copy-field"><input aria-label="Student access link" readOnly value={`${window.location.origin}/?assignment=${selectedAssignment.id}`} /><button className="icon-btn" aria-label="Copy assignment link" onClick={() => copyLink(selectedAssignment)}><Copy size={17} /></button></div><p className="field-hint">Frontend preview · this link uses sample data in the current browser.</p><div className="modal-actions"><Button onClick={() => window.open(`/?assignment=${selectedAssignment.id}`, '_blank', 'noopener,noreferrer')}>Preview student view<ArrowUpRight size={16} /></Button><Button variant="primary" onClick={() => { setClassFilter(selectedAssignment.className); setSelectedAssignment(null); navigate('Marking queue'); }}>View submissions<ArrowRight size={16} /></Button></div></div></Modal>}
-    {selectedReview && <ReviewDialog review={selectedReview} paper={(assignments.find(a => a.id === selectedReview.assignmentId)?.paperSnapshot ?? papers.find(p => p.id === assignments.find(a => a.id === selectedReview.assignmentId)?.paperId))!} onClose={() => setSelectedReview(null)} onSave={r => { setReviews(all => all.map(x => x.id === r.id ? r : x)); setSelectedReview(null); notify('Review draft saved. Results remain private.'); }} onRelease={releaseReview} />}
-    {selectedStudent && <Modal title={selectedStudent.name} subtitle={`${selectedStudent.id} · ${selectedStudent.className}`} onClose={() => setSelectedStudent(null)}><div className="modal-body"><div className="student-summary"><span className="avatar jumbo-avatar">{initials(selectedStudent.name)}</span><div><span className="muted">Approved assessment average</span><h2>{selectedStudent.score}% <span className="positive">+{selectedStudent.change} pts</span></h2></div></div><h3 className="spaced-title">Learning focus</h3><div className="info-banner"><Sparkles size={19} /><div><strong>{selectedStudent.gap}</strong><p>Build confidence with a short, focused practice paper. Ask the student to show each method step.</p></div></div><h3 className="spaced-title">Progress over time</h3><div className="student-history">{['July checkpoint', 'August practice', 'September review'].map((t, i) => <div key={t}><span>{t}</span><div className="progress-track"><span style={{ width: `${selectedStudent.score - (2 - i) * selectedStudent.change / 2}%` }} /></div><strong>{Math.round(selectedStudent.score - (2 - i) * selectedStudent.change / 2)}%</strong></div>)}</div><p className="field-hint">Sample history · tutor-approved assessments</p><div className="modal-actions"><Button variant="primary" onClick={() => { setSelectedStudent(null); setModal('create'); }}>Create targeted practice<Plus size={16} /></Button></div></div></Modal>}
-    {modal === 'help' && <Modal title="A little help, a lot of possibility." subtitle="Your MethodMark workspace, in four simple steps." onClose={() => setModal(null)}><div className="modal-body help-steps">{[{ icon: FileText, title: 'Create a practice paper', text: 'Choose a level and topics. Review the sample questions, worked solutions, and method and accuracy rubrics.' }, { icon: Link2, title: 'Publish and share', text: 'Assign a reviewed paper to a class and copy its student preview link.' }, { icon: CheckCheck, title: 'Review with confidence', text: 'Explore handwritten sample submissions, adjust marks, and check every question before releasing.' }, { icon: ChartNoAxesCombined, title: 'Find the next teaching moment', text: 'Explore class trends, common mistakes, and each student’s learning focus.' }].map((s, i) => <div key={s.title}><span className="soft-icon"><s.icon size={21} /></span><div><h3>{i + 1}. {s.title}</h3><p>{s.text}</p></div></div>)}<p className="demo-note">This is an interactive frontend prototype. Papers and AI marks are samples, and changes are saved in your browser. No accounts, servers, or AI services are connected.</p></div></Modal>}
-    {modal === 'notifications' && <Modal title="You’re up to date." subtitle="A few things happening in your workspace." onClose={() => setModal(null)}><div className="modal-body"><Activity icon={ClipboardCheck} title={`${pending.length} submissions awaiting your review`} detail="Your students’ next steps start here." time="Today" tone="green" /><Activity icon={CalendarDays} title="Quadratic equations is due soon" detail="Sec 3 · E-Math · 12 September" time="In 2 days" tone="purple" /><div className="modal-actions"><Button variant="primary" onClick={() => { setModal(null); navigate('Marking queue'); }}>Open marking queue<ArrowRight size={16} /></Button></div></div></Modal>}
+    {modal === 'create' && <Modal title="A great practice paper starts here." className="paper-builder-modal" onClose={() => setModal(null)}><PaperBuilderForm onClose={() => setModal(null)} onSave={async p => { const saved = await persistPaper(p); setModal(null); setSelectedPaper(saved); notify('Paper saved. Review the questions and rubric before publishing.'); }} /></Modal>}
+    {colourPaper && <ColourDialog name={colourPaper.title} colour={colourPaper.color}
+      onClose={() => setColourPaper(null)} onSave={async colour => {
+        const updated = await updatePaperColour(colourPaper.id, colour);
+        paperData.setData(current => current?.map(paper => paper.id === updated.id ? updated : paper) ?? null);
+      }} />}
+    {selectedPaper && <PaperDetail paper={selectedPaper} onClose={() => setSelectedPaper(null)} onDeleted={() => {
+      paperData.setData(current => current?.filter(paper => paper.id !== selectedPaper.id) ?? null);
+      setSelectedPaper(null);
+    }} onSave={async p => { const saved = await persistPaper(p); setSelectedPaper(saved); notify('Paper and rubric saved.'); return saved; }} onPublish={p => { setSelectedPaper(null); setPublishPaper(p); }} />}
+    {publishPaper && <PublishDialog paper={publishPaper} onClose={() => setPublishPaper(null)} onPublished={() => {
+      setPublishPaper(null); paperData.reload(); assignmentData.reload(); setAssignmentRevision(value => value + 1);
+      navigate('Assignments'); notify('Assignment published. Open it to share the student link.');
+    }} />}
+    {selectedReview && <ReviewDialog review={selectedReview} paper={initialPapers.find(p => p.id === initialAssignments.find(a => a.id === selectedReview.assignmentId)?.paperId)!} onClose={() => setSelectedReview(null)} onSave={r => { setReviews(all => all.map(x => x.id === r.id ? r : x)); setSelectedReview(null); notify('Review draft saved. Results remain private.'); }} onRelease={releaseReview} />}
+    {modal === 'notifications' && <Modal title="You’re up to date." subtitle="A few things happening with your students." onClose={() => setModal(null)}><div className="modal-body"><Activity icon={ClipboardCheck} title={`${pending.length} submissions awaiting your review`} detail="Your students’ next steps start here." time="Today" tone="green" /><Activity icon={CalendarDays} title="Quadratic equations is due soon" detail="Sec 3 · E-Math · 12 September" time="In 2 days" tone="purple" /><div className="modal-actions"><Button variant="primary" onClick={() => { setModal(null); navigate('Marking queue'); }}>Open marking queue<ArrowRight size={16} /></Button></div></div></Modal>}
     {modal === 'export' && <Modal title="Your progress, in a report." subtitle="Download the sample approved performance data as a CSV." onClose={() => setModal(null)}><div className="modal-body"><label>Class<ClassSelect value={classFilter} onChange={setClassFilter} /></label><div className="info-banner"><FileText size={20} /><p>Includes student codes, approved averages, progress, and learning focus. Opens in Excel or Google Sheets.</p></div><div className="modal-actions"><Button onClick={() => setModal(null)}>Cancel</Button><Button variant="primary" onClick={exportData}><ArrowDownToLine size={16} />Download CSV</Button></div></div></Modal>}
   </div>;
 }
@@ -161,120 +171,83 @@ function PerformanceChart({ classFilter, setClassFilter }: { classFilter: string
     <div className="chart-legend"><span><i className="legend-dot green-dot" />Current period</span><span><i className="legend-dash" />Previous period</span><span className="approved-caption"><ShieldCheck size={12} />Approved results only</span></div>
   </section>;
 }
-function AssignmentTable({ assignments, onSelect, compact = false }: { assignments: Assignment[]; onSelect: (a: Assignment) => void; compact?: boolean }) { return <div className="table-scroll"><table className="assignment-table"><thead><tr><th>Assignment</th>{!compact && <th>Class</th>}<th>Submissions</th><th>Due date</th><th>Status</th><th /></tr></thead><tbody>{assignments.map((a, i) => <tr key={a.id}><td><button className="assignment-name" onClick={() => onSelect(a)}><span className={`file-tile color-${i % 4}`}><FileText size={18} strokeWidth={1.6} /></span><span><strong>{a.title}</strong><small>{compact ? a.className : a.id}</small></span></button></td>{!compact && <td>{a.className}</td>}<td><div className="submission-cell"><span><strong>{a.submitted}</strong><span className="muted"> / {a.total}</span></span><div className="progress-track"><span style={{ width: `${a.submitted / a.total * 100}%` }} /></div></div></td><td className="nowrap">{dateLabel(a.due)}<small className="table-small">11:59 pm</small></td><td><Badge tone={a.review > 0 ? 'amber' : a.status === 'Released' ? 'green' : 'blue'}>{a.review > 0 ? 'To review' : a.status === 'Active' ? 'Published' : a.status}</Badge></td><td><button className="icon-btn" aria-label={`Open ${a.title}`} onClick={() => onSelect(a)}><ChevronRight size={16} /></button></td></tr>)}</tbody></table></div>; }
 function Activity({ icon: Icon, title, detail, time, tone }: { icon: LucideIcon; title: string; detail: string; time: string; tone: string }) { return <div className="activity"><span className={`activity-icon ${tone}`}><Icon size={15} /></span><div><strong>{title}</strong><p>{detail}</p><small>{time}</small></div></div>; }
 
-function PaperBuilder({ onClose, onSave }: { onClose: () => void; onSave: (p: Paper) => void }) {
-  const [title, setTitle] = useState('');
-  const [duration, setDuration] = useState(45);
-  const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState('');
-  const request = useRef<AbortController | null>(null);
-  useEffect(() => () => request.current?.abort(), []);
-
-  const generate = async (event: FormEvent) => {
-    event.preventDefault();
-    if (request.current) return;
-    const controller = new AbortController();
-    request.current = controller;
-    setGenerating(true);
-    setError('');
-    const timeout = window.setTimeout(() => controller.abort('timeout'), 30000);
-    try {
-      const questions = await fetchQuestions(controller.signal);
-      if (controller.signal.aborted) return;
-      if (!questions.length) {
-        setError('Your question bank is empty. Add questions, then try again.');
-        return;
-      }
-      onSave(createSamplePaper(questions, title, duration));
-    } catch (error) {
-      if (controller.signal.reason === 'timeout') {
-        setError('Loading the question bank took too long. Please try again.');
-      } else if (!controller.signal.aborted) {
-        setError(error instanceof Error ? error.message : 'Could not load the question bank. Please try again.');
-      }
-    } finally {
-      window.clearTimeout(timeout);
-      if (request.current === controller) request.current = null;
-      if (!controller.signal.aborted || controller.signal.reason === 'timeout') setGenerating(false);
-    }
-  };
-
-  return <Modal title="A great practice paper starts here." subtitle="Build a practice paper from your question bank." onClose={onClose}>
-    <form className="modal-body builder-form" onSubmit={generate} aria-busy={generating}>
-      <div className="demo-note"><BookOpen size={16} /><span>This sample includes every question in your question bank, across all topics and levels.</span></div>
-      <label>Paper title <span className="optional">optional</span>
-        <input value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Weekly mathematics practice" maxLength={100} disabled={generating} />
-      </label>
-      <label>Duration (minutes)
-        <input type="number" min={10} max={180} value={duration} onChange={event => setDuration(Number(event.target.value))} required disabled={generating} />
-      </label>
-      <div className="rubric-note"><ShieldCheck size={18} /><span>Review the questions, worked solutions, and marking rubrics before publishing.</span></div>
-      {error && <p className="validation-text" role="alert">{error}</p>}
-      <div className="modal-actions">
-        <Button onClick={onClose}>Cancel</Button>
-        <Button type="submit" variant="primary" disabled={generating}>
-          <Sparkles size={16} className={generating ? 'spinning' : ''} />
-          {generating ? 'Loading questions...' : 'Generate sample paper'}
-        </Button>
-      </div>
-    </form>
-  </Modal>;
-}
-
-function PaperDetail({ paper, onClose, onSave, onPublish }: { paper: Paper; onClose: () => void; onSave: (p: Paper) => void; onPublish: (p: Paper) => void }) {
+function PaperDetail({ paper, onClose, onSave, onPublish, onDeleted }: { paper: Paper; onClose: () => void; onDeleted: () => void; onSave: (p: Paper) => Promise<Paper>; onPublish: (p: Paper) => void }) {
   const [draft, setDraft] = useState(paper);
   const [showSolutions, setShowSolutions] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [reviewed, setReviewed] = useState(paper.approved);
-  const changed = JSON.stringify(draft) !== JSON.stringify(paper);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = useState(false);
+  const toast = useToast();
+  const published = paper.status === 'published';
+  async function save(publish = false) {
+    if (saving) return;
+    setSaving(true); toast.dismiss();
+    try {
+      const saved = published ? paper : await onSave({ ...draft, approved: reviewed });
+      setDraft(saved); setEditing(false);
+      if (publish) onPublish(saved);
+    } catch (reason) {
+      toast.error(reason instanceof Error ? reason.message : 'Could not save this paper.');
+    } finally { setSaving(false); }
+  }
+  const totalMarks = draft.questions.reduce((total, question) => total + questionMarks(question), 0);
+
+  useEffect(() => { stageRef.current?.scrollTo({ top: 0 }); }, [showSolutions, editing]);
+
   const updateQuestion = (index: number, question: Paper['questions'][number]) => {
     setDraft(paper => ({ ...paper, questions: paper.questions.map((item, i) => i === index ? question : item), approved: false }));
     setReviewed(false);
   };
 
-  return <Modal title="Your practice paper" subtitle={`${paper.level} / ${paper.subject}`} onClose={onClose} wide>
-    <div className="paper-detail-toolbar">
-      <span><FileText size={16} />{draft.questions.length} questions<span>&middot;</span>{draft.questions.reduce((total, question) => total + questionMarks(question), 0)} marks<span>&middot;</span>{draft.duration} min</span>
-      <Button variant="ghost" onClick={() => setEditing(!editing)}><Pencil size={14} />{editing ? 'Done editing' : 'Edit paper'}</Button>
-      <Button onClick={() => setShowSolutions(!showSolutions)}>{showSolutions ? 'Hide solutions' : 'Show solutions & rubric'}</Button>
-    </div>
-    <div className="modal-body paper-preview">
-      {editing ? <label>Paper title<input value={draft.title} onChange={event => {
-        setDraft({ ...draft, title: event.target.value, approved: false }); setReviewed(false);
-      }} /></label> : <h2>{draft.title}</h2>}
-      <p className="paper-instructions">Answer all questions. Show your working clearly. Calculators are permitted.</p>
-      {draft.questions.map((question, index) => <div key={question.id} className="question-card">
-        <div className="question-number">{String(index + 1).padStart(2, '0')}</div>
-        <div className="question-content">
-          <div className="question-topic"><span>{question.topic}</span><span>[{questionMarks(question)} marks]</span></div>
-          {question.bankQuestion && <div className="question-level">Secondary {question.bankQuestion.school_year} &middot; {question.bankQuestion.subject_level} &middot; {question.bankQuestion.difficulty}</div>}
-          <QuestionPrompt question={question} onChange={editing ? updated => updateQuestion(index, updated) : undefined} />
-          {(showSolutions || editing) && <QuestionSolution question={question} onChange={editing ? updated => updateQuestion(index, updated) : undefined} />}
-          {editing && !question.bankQuestion && questionBank[question.topic] && <button className="text-link" onClick={() => {
-            const bank = questionBank[question.topic];
-            const next = bank.find(item => item.text !== question.text) || bank[0];
-            updateQuestion(index, { ...question, ...next });
-          }}><RotateCcw size={13} />Replace with another sample</button>}
-        </div>
-      </div>)}
-      <label className="check-label"><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} />I have reviewed every question, solution, and marking rubric.</label>
-      <div className="modal-actions">
-        <Button onClick={() => onSave({ ...draft, approved: reviewed })}>Save {reviewed ? 'reviewed paper' : 'draft'}</Button>
-        <Button variant="primary" disabled={!reviewed || !draft.title.trim() || draft.questions.some(question => !question.text.trim() || !question.solution.trim())} onClick={() => {
-          const reviewedPaper = { ...draft, approved: true };
-          if (changed || !paper.approved) onSave(reviewedPaper);
-          onPublish(reviewedPaper);
-        }}>Publish assignment<ArrowRight size={16} /></Button>
-      </div>
-    </div>
-  </Modal>;
-}
+  const close = () => { if (!saving) onClose(); };
+  if (deleting) return <DeletePaperDialog paper={draft} onClose={() => setDeleting(false)} onDeleted={onDeleted} />;
 
-function PublishDialog({ paper, onClose, onPublish }: { paper: Paper; onClose: () => void; onPublish: (a: Assignment) => void }) {
-  const [className, setClassName] = useState(classes[0]); const [due, setDue] = useState('2026-09-17');
-  return <Modal title="Ready for your students." subtitle="Publish a reviewed paper as a class assignment." onClose={onClose}><form className="modal-body builder-form" onSubmit={e => { e.preventDefault(); if (!paper.approved) return; onPublish({ id: `MM-${crypto.randomUUID().slice(0, 8).toUpperCase()}`, paperId: paper.id, paperSnapshot: structuredClone(paper), title: paper.title, className, due, submitted: 0, total: 12, status: 'Active', review: 0 }); }}><div className="publish-paper"><span className="file-tile"><FileText size={23} /></span><div><strong>{paper.title}</strong><small>{paper.questions.length} questions · Reviewed paper</small></div><ShieldCheck size={22} /></div><label>Assign to class<select value={className} onChange={e => setClassName(e.target.value)}>{classes.map(c => <option key={c}>{c}</option>)}</select></label><label>Submission deadline<input type="date" value={due} min="2026-09-10" onChange={e => setDue(e.target.value)} required /><span className="field-hint">Submissions close at 11:59 pm Singapore time.</span></label><div className="rubric-note"><Link2 size={19} /><span>A unique preview link will be created. Student access uses a student code, with no account required.</span></div><div className="modal-actions"><Button onClick={onClose}>Cancel</Button><Button type="submit" variant="primary">Publish assignment<ArrowUpRight size={16} /></Button></div></form></Modal>;
+  return <Modal title="Your practice paper" onClose={close} className="paper-modal" wide
+    header={<PaperToolbar title="Your practice paper" description={`${draft.level} / ${draft.subject} · ${draft.questions.length} questions · ${totalMarks} marks · ${draft.duration} min`} onClose={close}>
+      <PaperToolbarButton label="Delete paper" icon={Trash2} className="paper-delete" disabled={saving} onClick={() => setDeleting(true)} />
+      {!published && <PaperToolbarButton label={editing ? 'Done editing' : 'Edit paper'} icon={Pencil} disabled={saving}
+        onClick={() => setEditing(!editing)} />}
+      <PaperToolbarButton label={showSolutions ? 'Back to question paper' : 'Show solutions & rubric'} icon={BookOpen}
+        disabled={editing} onClick={() => setShowSolutions(!showSolutions)} />
+      <PaperToolbarButton label="Print / Save PDF" icon={Printer} disabled={editing} onClick={() => window.print()} />
+    </PaperToolbar>}>
+    <div className="exam-paper-stage" ref={stageRef}>
+      {editing ? <div className="paper-editor">
+        <label>Paper title<input value={draft.title} onChange={event => {
+          setDraft({ ...draft, title: event.target.value, approved: false }); setReviewed(false);
+        }} /></label>
+        {draft.questions.map((question, index) => <div key={question.id} className="question-card">
+          <div className="question-number">{index + 1}</div>
+          <div className="question-content">
+            <div className="question-topic"><span>{question.topic}</span><span>[{questionMarks(question)} marks]</span></div>
+            {question.bankQuestion && <div className="question-level">Secondary {question.bankQuestion.school_year} &middot; {question.bankQuestion.subject_level} &middot; {question.bankQuestion.difficulty}</div>}
+            <QuestionPrompt question={question} onChange={updated => updateQuestion(index, updated)} />
+            <QuestionSolution question={question} onChange={updated => updateQuestion(index, updated)} />
+            {!question.bankQuestion && questionBank[question.topic] && <button className="text-link" onClick={() => {
+              const bank = questionBank[question.topic];
+              const next = bank.find(item => item.text !== question.text) || bank[0];
+              updateQuestion(index, { ...question, ...next });
+            }}><RotateCcw size={13} />Replace with another sample</button>}
+          </div>
+        </div>)}
+      </div> : <ExamPaper key={showSolutions ? 'solutions' : 'questions'} paper={draft} view={showSolutions ? 'solutions' : 'questions'} />}
+    </div>
+    <PaperActionBar actions={<>
+      {!published && <PaperToolbarButton label={saving ? 'Saving...' : reviewed ? 'Save reviewed paper' : 'Save draft'}
+        disabled={saving || !draft.title.trim()} onClick={() => void save()} />}
+      <PaperToolbarButton variant="primary" label={published ? 'Assign to classes' : 'Publish assignment'} icon={ArrowRight}
+        disabled={saving || !reviewed || !draft.title.trim() || draft.questions.some(question => !question.text.trim() || !question.solution.trim())}
+        onClick={() => void save(true)} />
+    </>}>
+      {published ? <p>This published paper is fixed so every class receives the same questions.</p>
+        : <label className="check-label"><input type="checkbox" checked={reviewed} disabled={saving}
+          onChange={event => setReviewed(event.target.checked)} />I have reviewed every question, solution, and marking rubric.</label>}
+    </PaperActionBar>
+  </Modal>;
 }
 
 function ReviewDialog({ review, paper, onClose, onSave, onRelease }: { review: Review; paper: Paper; onClose: () => void; onSave: (r: Review) => void; onRelease: (r: Review) => void }) {
@@ -284,9 +257,4 @@ function ReviewDialog({ review, paper, onClose, onSave, onRelease }: { review: R
   const valid = marksValid && draft.marks.every(m => m.checked && m.feedback.trim());
   const score = draft.marks.reduce((s, m) => s + m.method + m.accuracy, 0); const max = paper.questions.reduce((s, q) => s + questionMarks(q), 0);
   return <Modal title={review.approved ? `${review.name} · Released result` : `A closer look at ${review.name}’s work`} subtitle={`${paper.title} · ${review.code}`} onClose={onClose} wide><div className="review-dialog-meta"><Badge tone={review.approved ? 'green' : review.flagged ? 'amber' : 'blue'}>{review.approved ? 'Tutor approved' : review.flagged ? 'Question 1 flagged for review' : 'Awaiting your review'}</Badge><span>{review.approved ? 'Final' : 'Provisional'} score <strong>{score} / {max}</strong></span></div><div className="question-tabs">{paper.questions.map((q, i) => <button key={q.id} className={i === index ? 'selected' : ''} onClick={() => { setIndex(i); setConfirm(false); }}>Question {i + 1}{draft.marks[i].checked && <Check size={13} />}</button>)}</div><div className="review-workspace"><div className="working-pane"><div className="pane-label"><span>STUDENT WORKING</span><Badge tone="gray">Sample submission</Badge></div><p className="working-question">{q.text}</p><div className="notebook"><div className="notebook-name">{review.name} <span>Q{index + 1}</span></div><div className="notebook-working">{q.solution.split('. ').map((step, i) => <p key={i}>{review.flagged && index === 0 && i === q.solution.split('. ').length - 1 ? <><span className="unclear-work">{step}</span><span className="handwritten-note">?</span></> : step}</p>)}</div><span className="notebook-caption">Illustrative transcription of handwritten work</span></div>{review.flagged && index === 0 && <div className="flag-note"><CircleAlert size={17} /><span>The final line is unclear. Verify the accuracy mark before approving.</span></div>}</div><div className="rubric-pane"><div className="pane-label"><span>MARKING & FEEDBACK</span><Sparkles size={15} /></div><div className="expected-solution"><strong>Expected solution</strong><p>{q.solution}</p></div><div className="marks-inputs"><label>Method marks<small>Correct method & steps</small><div><input aria-label="Method marks" type="number" min={0} max={q.method} step={1} value={Number.isNaN(mark.method) ? '' : mark.method} disabled={review.approved} onChange={e => update({ method: e.target.value === '' ? NaN : Number(e.target.value), checked: false })} /><span>/ {q.method}</span></div></label><label>Accuracy marks<small>Correct final answer</small><div><input aria-label="Accuracy marks" type="number" min={0} max={q.accuracy} step={1} value={Number.isNaN(mark.accuracy) ? '' : mark.accuracy} disabled={review.approved} onChange={e => update({ accuracy: e.target.value === '' ? NaN : Number(e.target.value), checked: false })} /><span>/ {q.accuracy}</span></div></label></div>{!marksValid && <p className="validation-text">Use whole-number marks within the rubric totals before saving.</p>}<label>Feedback to student<textarea rows={4} value={mark.feedback} disabled={review.approved} onChange={e => update({ feedback: e.target.value, checked: false })} /></label><label className="check-label"><input type="checkbox" checked={mark.checked} disabled={review.approved} onChange={e => update({ checked: e.target.checked })} />I’ve checked the working, marks, and feedback.</label>{index < paper.questions.length - 1 && <Button onClick={() => setIndex(index + 1)}>Next question<ChevronRight size={15} /></Button>}</div></div><div className="review-dialog-footer">{review.approved ? <><span><ShieldCheck size={16} />Released with tutor approval</span><Button onClick={onClose}>Done</Button></> : confirm ? <div className="release-confirm"><div><strong>Release {score}/{max} to {review.name}?</strong><p>All {draft.marks.length} questions have been reviewed. This approves the result in the demo.</p></div><Button onClick={() => setConfirm(false)}>Back</Button><Button variant="primary" onClick={() => onRelease(draft)}>Confirm release<Check size={16} /></Button></div> : <><span>{draft.marks.filter(m => m.checked).length} of {draft.marks.length} questions checked</span><div><Button disabled={!marksValid} onClick={() => onSave(draft)}>Save draft</Button><Button variant="primary" disabled={!valid} onClick={() => setConfirm(true)}>Approve & release<CheckCheck size={16} /></Button></div></>}</div></Modal>;
-}
-
-function StudentPreview({ assignment, paper }: { assignment?: Assignment; paper?: Paper }) {
-  const [code, setCode] = useState(''); const [started, setStarted] = useState(false); const [error, setError] = useState(''); const [submitted, setSubmitted] = useState(false); const [answers, setAnswers] = useState<Record<string, string>>({}); const [files, setFiles] = useState<File[]>([]);
-  return <div className="student-preview-page"><header><a className="brand" href="/"><span className="brand-mark">m.</span>MethodMark.</a><Badge tone="gray">Student preview</Badge></header><main><a className="text-link no-print" href="/"><ChevronLeft size={15} />Back to tutor workspace</a>{!assignment || !paper ? <Empty title="This preview link isn’t available" text="Open the link in the browser where it was created, or ask your tutor for help." /> : submitted ? <section className="panel student-welcome"><span className="success-circle"><Check size={32} /></span><h1>One more step forward.</h1><p>Your sample submission is complete. In the full platform, your tutor will review your work before results are released.</p><Badge>Awaiting tutor review</Badge><p className="field-hint">Frontend preview only · answers and files have not been uploaded.</p></section> : !started ? <section className="panel student-welcome"><span className="soft-icon"><BookOpen size={28} /></span><span className="eyebrow">{assignment.className}</span><h1>{paper.title}</h1><p>{paper.questions.length} questions · {paper.duration} minutes · Due {dateLabel(assignment.due)}</p><form onSubmit={e => { e.preventDefault(); const match = students.find(s => s.id.toLowerCase() === code.trim().toLowerCase() && s.className === assignment.className); if (!match) { setError('That code does not belong to this class. Check it with your tutor.'); return; } setStarted(true); }}><label>Your student code<input value={code} onChange={e => setCode(e.target.value)} placeholder="e.g. S301" required /></label>{error && <p className="validation-text">{error}</p>}<Button type="submit" variant="primary">Open practice paper<ArrowRight size={16} /></Button></form><p className="field-hint">Demo tip: use {students.find(s => s.className === assignment.className)?.id} for this class. No account needed.</p></section> : <section className="panel student-paper"><div className="student-paper-heading"><div><h1>{paper.title}</h1><p>{code.toUpperCase()} · Show your working clearly.</p></div><Button className="no-print" onClick={() => window.print()}><ArrowDownToLine size={16} />Print / Save PDF</Button></div><p className="demo-note no-print">Frontend preview: complete the questions below or attach photos. No answers or files are uploaded.</p>{paper.questions.map((q, i) => <div key={q.id} className="student-question"><h3>Question {i + 1} <span>[{questionMarks(q)} marks]</span></h3><QuestionPrompt question={q} /><textarea aria-label={`Answer to question ${i + 1}`} rows={4} placeholder="Show your working here…" value={answers[q.id] || ''} onChange={e => setAnswers({ ...answers, [q.id]: e.target.value })} /></div>)}<div className="upload-area no-print"><ArrowDownToLine size={23} /><h3>Prefer pen and paper?</h3><p>Attach clear photos of your workings. JPG or PNG, up to 10 MB each.</p><input aria-label="Upload handwritten solutions" type="file" accept="image/jpeg,image/png" multiple onChange={e => { const chosen = Array.from(e.target.files || []); if (chosen.some(f => !['image/jpeg', 'image/png'].includes(f.type) || f.size > 10 * 1024 * 1024)) { setError('Choose JPG or PNG images under 10 MB.'); return; } setError(''); setFiles(chosen); }} />{files.map(f => <div key={f.name} className="file-chosen"><FileText size={14} />{f.name}<button aria-label={`Remove ${f.name}`} onClick={() => setFiles(all => all.filter(x => x !== f))}><X size={15} /></button></div>)}</div>{error && <p className="validation-text">{error}</p>}<div className="modal-actions no-print"><Button variant="primary" disabled={!files.length && !paper.questions.every(q => answers[q.id]?.trim())} onClick={() => setSubmitted(true)}>Submit sample work<Check size={16} /></Button></div></section>}</main></div>;
 }

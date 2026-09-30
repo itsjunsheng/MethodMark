@@ -1,26 +1,47 @@
--- MethodMark: copy this ENTIRE file into Supabase SQL Editor and run once.
--- Fresh project only. Creates 3 tables, 5 demo questions and 2 demo papers.
--- Change methodmark.seed_tutor_email below to your tutor Auth email if desired.
--- A demo tutor profile is not a login account; passwords belong to Supabase Auth.
--- If you already ran the earlier full setup, do not run this bootstrap again.
--- Regenerate this file with: python supabase/scripts/build_sql_editor.py
--- Sources: migrations/20260927000100_initial_methodmark_schema.sql + seed.sql
-
+-- Fresh setup. Keep auth.users. Run seed_questions.sql separately.
 begin;
 
--- Initial MethodMark schema: tutor profiles, question bank and saved papers.
--- Fresh database only. Student access is account-free through get_student_paper.
+-- Remove retired signup hooks.
+drop trigger if exists methodmark_tutor_signup on auth.users;
+drop function if exists public.methodmark_new_tutor();
+drop function if exists public.get_student_paper(uuid);
 
-
-create table public.tutors (
+-- Tutor-owned classes.
+create table public.classes (
     id uuid primary key default gen_random_uuid(),
-    auth_user_id uuid unique references auth.users(id) on delete set null,
-    name text not null,
-    email text not null unique,
+    tutor_id uuid not null default auth.uid()
+        references auth.users(id) on delete cascade,
+    name text not null check (length(btrim(name)) between 1 and 100),
+    color text not null default
+        (array['sage','blue','lavender','rose','peach','sand'])[1 + floor(random() * 6)::integer]
+        check (color in ('sage','blue','lavender','rose','peach','sand')),
+
+    subject text not null check (subject in ('Mathematics', 'Additional Mathematics')),
+    school_year smallint not null check (school_year between 1 and 5),
+    subject_level text not null check (subject_level in ('G1', 'G2', 'G3')),
+    is_archived boolean not null default false,
     created_at timestamptz not null default now(),
-    updated_at timestamptz not null default now()
+    updated_at timestamptz not null default now(),
+    unique (id, tutor_id)
 );
 
+-- Each student record belongs to one class.
+create table public.students (
+    id uuid primary key default gen_random_uuid(),
+    tutor_id uuid not null default auth.uid(),
+    class_id uuid not null,
+    student_code text not null
+        check (length(student_code) <= 50 and student_code ~ '^[a-z]+-[a-z]+$'),
+    name text check (length(btrim(name)) between 1 and 100),
+    is_active boolean not null default true,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    foreign key (class_id, tutor_id)
+        references public.classes(id, tutor_id) on delete cascade,
+    unique (class_id, student_code)
+);
+
+-- Question parts, solutions and rubrics share part IDs.
 create table public.questions (
     id uuid primary key default gen_random_uuid(),
     subject text not null check (subject in ('Mathematics', 'Additional Mathematics')),
@@ -38,47 +59,95 @@ create table public.questions (
         jsonb_typeof(question_content) = 'object'
         and jsonb_typeof(question_content -> 'shared_blocks') = 'array'
         and jsonb_typeof(question_content -> 'parts') = 'array'
-        and question_content -> 'parts' <> '[]'::jsonb, false)),
+        and jsonb_array_length(question_content -> 'parts') > 0, false)),
     check (coalesce(
         jsonb_typeof(solution) = 'object'
         and jsonb_typeof(solution -> 'parts') = 'array'
-        and solution -> 'parts' <> '[]'::jsonb, false)),
+        and jsonb_array_length(solution -> 'parts') > 0, false)),
     check (coalesce(
         jsonb_typeof(marking_rubric) = 'object'
         and jsonb_typeof(marking_rubric -> 'parts') = 'array'
-        and marking_rubric -> 'parts' <> '[]'::jsonb, false))
+        and jsonb_array_length(marking_rubric -> 'parts') > 0, false))
 );
 
+-- Ordered paper snapshots.
 create table public.papers (
     id uuid primary key default gen_random_uuid(),
-    tutor_id uuid not null references public.tutors(id),
-    title text not null check (length(btrim(title)) > 0),
+    tutor_id uuid not null default auth.uid()
+        references auth.users(id) on delete cascade,
+    title text not null check (length(btrim(title)) between 1 and 200),
+    color text not null default
+        (array['sage','blue','lavender','rose','peach','sand'])[1 + floor(random() * 6)::integer]
+        check (color in ('sage','blue','lavender','rose','peach','sand')),
+
     subject text not null check (subject in ('Mathematics', 'Additional Mathematics')),
     school_year smallint not null check (school_year between 1 and 5),
     subject_level text not null check (subject_level in ('G1', 'G2', 'G3')),
     duration_minutes integer not null check (duration_minutes > 0),
     instructions text not null default 'Answer all questions. Show your working clearly.',
+    is_deleted boolean not null default false,
     status text not null default 'draft'
         check (status in ('draft', 'reviewed', 'published', 'archived')),
     questions_snapshot jsonb not null default '[]'::jsonb
         check (jsonb_typeof(questions_snapshot) = 'array'),
     question_count integer
         generated always as (jsonb_array_length(questions_snapshot)) stored,
-    share_token uuid not null unique default gen_random_uuid(),
     published_at timestamptz,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
+    unique (id, tutor_id),
     check (status not in ('reviewed', 'published')
         or jsonb_array_length(questions_snapshot) > 0)
 );
 
-create index questions_filter_idx
-    on public.questions (subject, school_year, subject_level, difficulty)
-    where status = 'approved';
-create index questions_topics_idx on public.questions using gin (topics);
-create index papers_tutor_idx on public.papers (tutor_id, created_at desc);
+-- One assignment per paper and class.
+create table public.assignments (
+    id uuid primary key default gen_random_uuid(),
+    tutor_id uuid not null default auth.uid(),
+    class_id uuid not null,
+    paper_id uuid not null,
+    share_token uuid not null unique default gen_random_uuid(),
+    status text not null default 'draft' check (status in ('draft', 'published', 'closed')),
+    due_at timestamptz,
+    published_at timestamptz,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    foreign key (class_id, tutor_id)
+        references public.classes(id, tutor_id) on delete cascade,
+    foreign key (paper_id, tutor_id)
+        references public.papers(id, tutor_id) on delete cascade,
+    unique (class_id, paper_id),
+    check (status = 'draft' or published_at is not null)
+);
 
-create function public.methodmark_touch_updated_at()
+-- One submission per student and assignment.
+create table public.submissions (
+    id uuid primary key,
+    assignment_id uuid not null references public.assignments(id) on delete cascade,
+    student_id uuid not null references public.students(id) on delete cascade,
+    student_code text not null,
+    drawing jsonb not null default '{}'::jsonb check (jsonb_typeof(drawing) = 'object'),
+    attachments jsonb not null default '[]'::jsonb
+        check (jsonb_typeof(attachments) = 'array' and jsonb_array_length(attachments) <= 5),
+    submitted_at timestamptz not null default now(),
+    unique (assignment_id, student_id)
+);
+
+-- Query indexes.
+create index classes_tutor_idx on public.classes(tutor_id, created_at desc);
+create index students_tutor_idx on public.students(tutor_id);
+create index students_roster_idx on public.students(class_id, created_at, id) where is_active;
+create index questions_filter_idx
+    on public.questions(subject, school_year, subject_level, difficulty)
+    where status = 'approved';
+create index questions_topics_idx on public.questions using gin(topics);
+create index papers_tutor_idx on public.papers(tutor_id, created_at desc);
+create index assignments_tutor_idx on public.assignments(tutor_id, created_at desc);
+create index assignments_paper_idx on public.assignments(paper_id);
+create index submissions_student_idx on public.submissions(student_id);
+
+-- Modification timestamps.
+create or replace function public.methodmark_touch_updated_at()
 returns trigger language plpgsql set search_path = '' as $$
 begin
     new.updated_at := now();
@@ -86,15 +155,19 @@ begin
 end;
 $$;
 
-create trigger tutors_updated_at before update on public.tutors
+create trigger classes_updated_at before update on public.classes
+for each row execute function public.methodmark_touch_updated_at();
+create trigger students_updated_at before update on public.students
 for each row execute function public.methodmark_touch_updated_at();
 create trigger questions_updated_at before update on public.questions
 for each row execute function public.methodmark_touch_updated_at();
 create trigger papers_updated_at before update on public.papers
 for each row execute function public.methodmark_touch_updated_at();
+create trigger assignments_updated_at before update on public.assignments
+for each row execute function public.methodmark_touch_updated_at();
 
--- Preserve the exact paper students received.
-create function public.methodmark_guard_paper()
+-- Freeze published paper content.
+create or replace function public.methodmark_guard_paper()
 returns trigger language plpgsql set search_path = '' as $$
 declare
     content_changed boolean;
@@ -135,427 +208,320 @@ begin
     return new;
 end;
 $$;
-
 create trigger papers_guard before insert or update on public.papers
 for each row execute function public.methodmark_guard_paper();
 
--- New tutor registrations create profiles or attach to the seeded profile.
--- Students use shared links; do not create anonymous Auth users for them.
-create function public.methodmark_new_tutor()
-returns trigger language plpgsql security definer set search_path = '' as $$
+-- Only published papers can be assigned.
+create or replace function public.methodmark_guard_assignment()
+returns trigger language plpgsql set search_path = '' as $$
 begin
-    if new.email is not null and coalesce(new.is_anonymous, false) = false then
-        insert into public.tutors (auth_user_id, name, email)
-        values (
-            new.id,
-            coalesce(nullif(btrim(new.raw_user_meta_data ->> 'name'), ''), 'Tutor'),
-            lower(new.email)
-        )
-        on conflict (email) do update
-            set auth_user_id = excluded.auth_user_id
-            where public.tutors.auth_user_id is null
-               or public.tutors.auth_user_id = excluded.auth_user_id;
+    if tg_op = 'INSERT' then
+        new.published_at := null;
+    else
+        if row(new.id, new.tutor_id, new.class_id, new.paper_id)
+            is distinct from row(old.id, old.tutor_id, old.class_id, old.paper_id) then
+            raise exception 'Assignment identity cannot be changed';
+        end if;
+        new.published_at := old.published_at;
+    end if;
+
+    if new.status = 'published' then
+        if not exists (
+            select 1 from public.papers
+            where id = new.paper_id and tutor_id = new.tutor_id and status = 'published'
+        ) then
+            raise exception 'Publish the reviewed paper before opening its class assignment';
+        end if;
+        new.published_at := coalesce(new.published_at, now());
+    elsif new.status = 'draft' and new.published_at is not null then
+        raise exception 'Close a published assignment instead of returning it to draft';
     end if;
     return new;
 end;
 $$;
-
-create trigger methodmark_tutor_signup after insert on auth.users
-for each row execute function public.methodmark_new_tutor();
+create trigger assignments_guard before insert or update on public.assignments
+for each row execute function public.methodmark_guard_assignment();
 
 revoke all on function public.methodmark_touch_updated_at() from public, anon, authenticated;
 revoke all on function public.methodmark_guard_paper() from public, anon, authenticated;
-revoke all on function public.methodmark_new_tutor() from public, anon, authenticated;
+revoke all on function public.methodmark_guard_assignment() from public, anon, authenticated;
 
--- Tutor tables are private; the student function below exposes questions only.
-alter table public.tutors enable row level security;
+-- Tutor access.
+alter table public.classes enable row level security;
+alter table public.students enable row level security;
 alter table public.questions enable row level security;
 alter table public.papers enable row level security;
+alter table public.assignments enable row level security;
+alter table public.submissions enable row level security;
 
-revoke all on public.tutors, public.questions, public.papers
-    from public, anon, authenticated;
-grant usage on schema public to anon, authenticated, service_role;
-grant select on public.tutors, public.questions, public.papers to authenticated;
-grant update (name) on public.tutors to authenticated;
-grant insert, update, delete on public.papers to authenticated;
-grant all on public.tutors, public.questions, public.papers to service_role;
+revoke all on public.classes, public.students, public.questions, public.papers,
+    public.assignments, public.submissions from public, anon, authenticated;
+grant usage on schema public to authenticated, service_role;
+grant all on public.classes, public.students, public.questions, public.papers,
+    public.assignments, public.submissions to service_role;
 
-create policy tutors_read_own on public.tutors
-for select to authenticated
-using (auth_user_id = (select auth.uid()));
+grant select, insert, delete on public.classes to authenticated;
+grant update(name, subject, school_year, subject_level, color, is_archived)
+    on public.classes to authenticated;
+grant select, insert on public.students to authenticated;
+grant update(name, is_active) on public.students to authenticated;
+grant select on public.questions, public.submissions to authenticated;
+grant select, insert, update, delete on public.papers to authenticated;
+grant select, insert, delete on public.assignments to authenticated;
+grant update(status, due_at, share_token) on public.assignments to authenticated;
 
-create policy tutors_edit_own on public.tutors
-for update to authenticated
-using (auth_user_id = (select auth.uid()))
-with check (auth_user_id = (select auth.uid()));
+create policy classes_owner on public.classes for all to authenticated
+using (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false')
+with check (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
 
-create policy tutors_read_question_bank on public.questions
-for select to authenticated
-using (
-    status = 'approved'
-    and exists (
-        select 1 from public.tutors where auth_user_id = (select auth.uid())
-    )
-);
+create policy students_owner on public.students for all to authenticated
+using (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false')
+with check (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
 
-create policy tutors_read_papers on public.papers
-for select to authenticated
-using (tutor_id in (
-    select id from public.tutors where auth_user_id = (select auth.uid())
+create policy approved_questions on public.questions for select to authenticated
+using (status = 'approved' and (select auth.uid()) is not null
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
+
+create policy papers_select on public.papers for select to authenticated
+using (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
+
+create policy papers_insert on public.papers for insert to authenticated
+with check (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
+
+create policy papers_update on public.papers for update to authenticated
+using (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false')
+with check (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
+
+create policy papers_delete on public.papers for delete to authenticated
+using (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false' and status = 'draft');
+
+create policy assignments_select on public.assignments for select to authenticated
+using (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
+
+create policy assignments_insert on public.assignments for insert to authenticated
+with check (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
+
+create policy assignments_update on public.assignments for update to authenticated
+using (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false')
+with check (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
+
+create policy assignments_delete on public.assignments for delete to authenticated
+using (tutor_id = (select auth.uid())
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false' and status = 'draft');
+
+create policy submissions_read_own on public.submissions for select to authenticated
+using (exists (
+    select 1 from public.assignments a
+    where a.id = assignment_id and a.tutor_id = (select auth.uid())
 ));
 
-create policy tutors_create_papers on public.papers
-for insert to authenticated
-with check (tutor_id in (
-    select id from public.tutors where auth_user_id = (select auth.uid())
-));
-
-create policy tutors_edit_papers on public.papers
-for update to authenticated
-using (tutor_id in (
-    select id from public.tutors where auth_user_id = (select auth.uid())
-))
-with check (tutor_id in (
-    select id from public.tutors where auth_user_id = (select auth.uid())
-));
-
-create policy tutors_delete_drafts on public.papers
-for delete to authenticated
-using (
-    status = 'draft'
-    and tutor_id in (
-        select id from public.tutors where auth_user_id = (select auth.uid())
-    )
-);
-
--- Students call this function with a published paper's share_token.
--- Returns content and available marks, never solutions or rubric criteria.
-create function public.get_student_paper(p_share_token uuid)
-returns jsonb language sql stable security definer set search_path = '' as $$
-    select jsonb_build_object(
-        'id', p.id,
-        'title', p.title,
-        'subject', p.subject,
-        'school_year', p.school_year,
-        'subject_level', p.subject_level,
-        'duration_minutes', p.duration_minutes,
-        'instructions', p.instructions,
-        'question_count', p.question_count,
-        'questions', (
-            select coalesce(jsonb_agg(jsonb_build_object(
-                'paper_question_id', item.value ->> 'paper_question_id',
-                'position', item.ordinality,
-                'question_content', item.value -> 'question_content',
-                'part_marks', (
-                    select jsonb_object_agg(part ->> 'part_id', (
-                        select coalesce(sum((point ->> 'max_marks')::numeric), 0)
-                        from jsonb_array_elements(part -> 'marking_points') as point
-                    ))
-                    from jsonb_array_elements(
-                        item.value -> 'marking_rubric' -> 'parts'
-                    ) as part
-                )
-            ) order by item.ordinality), '[]'::jsonb)
-            from jsonb_array_elements(p.questions_snapshot)
-                with ordinality as item(value, ordinality)
-        )
-    )
-    from public.papers as p
-    where p.share_token = p_share_token and p.status = 'published';
-$$;
-
-revoke all on function public.get_student_paper(uuid) from public, anon, authenticated;
-grant execute on function public.get_student_paper(uuid)
-    to anon, authenticated, service_role;
-
--- DEMO SEED DATA
-
--- Demo data only. Safe to rerun for the same demo tutor: existing question
--- and paper IDs are preserved rather than overwritten.
--- Change this email before the first run to attach papers to your Auth account.
-
-select set_config('methodmark.seed_tutor_email', '20junsheng01@gmail.com', true);
-
--- Reuse a matching tutor profile if it already exists.
-insert into public.tutors (id, name, email)
-values (
-    '00000000-0000-4000-8000-000000000001',
-    'Demo Tutor',
-    lower(current_setting('methodmark.seed_tutor_email'))
-)
-on conflict (email) do nothing;
-
--- Link existing Auth accounts, including the demo email.
-insert into public.tutors (auth_user_id, name, email)
-select
-    id,
-    coalesce(nullif(btrim(raw_user_meta_data ->> 'name'), ''), 'Tutor'),
-    lower(email)
-from auth.users
-where email is not null and coalesce(is_anonymous, false) = false
-on conflict (email) do update
-set auth_user_id = excluded.auth_user_id
-where public.tutors.auth_user_id is null;
-
--- SAMPLE 1: standalone quadratic question.
-insert into public.questions (
-    id, subject, school_year, subject_level, topics, difficulty,
-    question_content, solution, marking_rubric, status
-) values (
-    '10000000-0000-4000-8000-000000000001',
-    'Mathematics', 3, 'G3', array['Quadratic equations'], 'medium',
-    $json$
-    {
-      "shared_blocks": [],
-      "parts": [
-        {"id":"main","label":null,"blocks":[
-          {"type":"text","text":"Solve x² − 9 = 0, showing your working."}
-        ]}
-      ]
-    }
-    $json$::jsonb,
-    $json$
-    {
-      "parts":[
-        {"part_id":"main","worked_solution":[
-          "(x − 3)(x + 3) = 0",
-          "x = 3 or x = −3"
-        ]}
-      ]
-    }
-    $json$::jsonb,
-    $json$
-    {
-      "parts":[
-        {"part_id":"main","marking_points":[
-          {"id":"main_m1","code":"M1","max_marks":1,
-           "criterion":"Uses a valid method, such as factorisation or taking square roots."},
-          {"id":"main_a1","code":"A1","max_marks":1,
-           "criterion":"States both roots: 3 and −3."}
-        ]}
-      ]
-    }
-    $json$::jsonb,
-    'approved'
-)
-on conflict (id) do nothing;
-
--- SAMPLE 2: two-part question.
-insert into public.questions (
-    id, subject, school_year, subject_level, topics, difficulty,
-    question_content, solution, marking_rubric, status
-) values (
-    '10000000-0000-4000-8000-000000000002',
-    'Mathematics', 3, 'G3', array['Linear equations'], 'easy',
-    $json$
-    {
-      "shared_blocks":[
-        {"type":"text","text":"The variables x and y are related by y = 3x + 2."}
-      ],
-      "parts":[
-        {"id":"part_a","label":"(a)","blocks":[
-          {"type":"text","text":"Find y when x = 4."}
-        ]},
-        {"id":"part_b","label":"(b)","blocks":[
-          {"type":"text","text":"Find x when y = 20."}
-        ]}
-      ]
-    }
-    $json$::jsonb,
-    $json$
-    {
-      "parts":[
-        {"part_id":"part_a","worked_solution":["y = 3(4) + 2","y = 14"]},
-        {"part_id":"part_b","worked_solution":["20 = 3x + 2","3x = 18","x = 6"]}
-      ]
-    }
-    $json$::jsonb,
-    $json$
-    {
-      "parts":[
-        {"part_id":"part_a","marking_points":[
-          {"id":"a_m1","code":"M1","max_marks":1,"criterion":"Correctly substitutes x = 4."},
-          {"id":"a_a1","code":"A1","max_marks":1,"criterion":"Obtains y = 14."}
-        ]},
-        {"part_id":"part_b","marking_points":[
-          {"id":"b_m1","code":"M1","max_marks":1,"criterion":"Forms 20 = 3x + 2."},
-          {"id":"b_a1","code":"A1","max_marks":1,"criterion":"Obtains x = 6."}
-        ]}
-      ]
-    }
-    $json$::jsonb,
-    'approved'
-)
-on conflict (id) do nothing;
-
--- SAMPLE 3: question with stored SVG diagram source.
-insert into public.questions (
-    id, subject, school_year, subject_level, topics, difficulty,
-    question_content, solution, marking_rubric, status
-) values (
-    '10000000-0000-4000-8000-000000000003',
-    'Mathematics', 2, 'G3', array['Pythagoras theorem'], 'medium',
-    $json$
-    {
-      "shared_blocks":[
-        {"type":"text","text":"Triangle ABC is right-angled at B. AB = 3 cm and BC = 4 cm."},
-        {"type":"diagram","format":"svg",
-         "source":"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 140 110'><path d='M20 20 L20 80 L100 80 Z M20 70 H30 V80' fill='none' stroke='black'/><text x='8' y='18'>A</text><text x='6' y='94'>B</text><text x='104' y='94'>C</text></svg>",
-         "alt_text":"Triangle ABC with AB vertical, BC horizontal, and a right angle at B."}
-      ],
-      "parts":[
-        {"id":"main","label":null,"blocks":[
-          {"type":"text","text":"Calculate the length of AC."}
-        ]}
-      ]
-    }
-    $json$::jsonb,
-    $json$
-    {
-      "parts":[
-        {"part_id":"main","worked_solution":[
-          "AC² = AB² + BC²",
-          "AC² = 3² + 4² = 25",
-          "AC = 5 cm"
-        ]}
-      ]
-    }
-    $json$::jsonb,
-    $json$
-    {
-      "parts":[
-        {"part_id":"main","marking_points":[
-          {"id":"main_m1","code":"M1","max_marks":1,
-           "criterion":"Correctly applies Pythagoras theorem: AC² = 3² + 4²."},
-          {"id":"main_a1","code":"A1","max_marks":1,"criterion":"Obtains AC = 5 cm."}
-        ]}
-      ]
-    }
-    $json$::jsonb,
-    'approved'
-)
-on conflict (id) do nothing;
-
--- SAMPLE 4: G2 question.
-insert into public.questions (
-    id, subject, school_year, subject_level, topics, difficulty,
-    question_content, solution, marking_rubric, status
-) values (
-    '10000000-0000-4000-8000-000000000004',
-    'Mathematics', 2, 'G2', array['Linear equations'], 'easy',
-    '{"shared_blocks":[],"parts":[{"id":"main","label":null,"blocks":[{"type":"text","text":"Solve 3x + 7 = 22."}]}]}'::jsonb,
-    '{"parts":[{"part_id":"main","worked_solution":["3x = 15","x = 5"]}]}'::jsonb,
-    '{"parts":[{"part_id":"main","marking_points":[
-      {"id":"main_m1","code":"M1","max_marks":1,"criterion":"Subtracts 7 from both sides to obtain 3x = 15."},
-      {"id":"main_a1","code":"A1","max_marks":1,"criterion":"Obtains x = 5."}
-    ]}]}'::jsonb,
-    'approved'
-)
-on conflict (id) do nothing;
-
--- SAMPLE 5: G1 question.
-insert into public.questions (
-    id, subject, school_year, subject_level, topics, difficulty,
-    question_content, solution, marking_rubric, status
-) values (
-    '10000000-0000-4000-8000-000000000005',
-    'Mathematics', 1, 'G1', array['Percentages'], 'easy',
-    '{"shared_blocks":[],"parts":[{"id":"main","label":null,"blocks":[{"type":"text","text":"Find 20% of 80."}]}]}'::jsonb,
-    '{"parts":[{"part_id":"main","worked_solution":["20 ÷ 100 × 80","16"]}]}'::jsonb,
-    '{"parts":[{"part_id":"main","marking_points":[
-      {"id":"main_m1","code":"M1","max_marks":1,"criterion":"Uses 20 ÷ 100 × 80 or an equivalent method."},
-      {"id":"main_a1","code":"A1","max_marks":1,"criterion":"Obtains 16."}
-    ]}]}'::jsonb,
-    'approved'
-)
-on conflict (id) do nothing;
-
--- Only newly inserted papers are published below. Existing paper edits/statuses
--- are preserved on subsequent seed runs. Array order sets question numbering.
-do $seed_papers$
+-- Generate unused class codes; stable UUIDs make retries safe.
+create or replace function public.add_class_students(p_class_id uuid, p_student_ids uuid[])
+returns setof public.students
+language plpgsql security invoker set search_path = '' as $$
 declare
-    seed_tutor_id uuid;
-    inserted_ids uuid[];
+    student_uuid uuid;
+    existing public.students;
+    code text;
+    colours constant text[] := array[
+        'red','blue','green','yellow','orange','purple','pink','white',
+        'black','grey','brown','gold','silver','teal','navy','coral',
+        'mint','peach','violet','indigo','amber','ivory','lime','olive'
+    ];
+    animals constant text[] := array[
+        'panda','tiger','lion','bear','otter','fox','wolf','deer',
+        'rabbit','koala','eagle','owl','duck','swan','robin','parrot',
+        'penguin','dolphin','whale','seal','turtle','frog','gecko','lizard',
+        'zebra','giraffe','elephant','rhino','hippo','monkey','gorilla','lemur',
+        'kangaroo','wombat','badger','beaver','squirrel','hamster','hedgehog','mole',
+        'cat','dog','horse','pony','sheep','goat','alpaca','llama'
+    ];
 begin
-    select id into strict seed_tutor_id
-    from public.tutors
-    where email = lower(current_setting('methodmark.seed_tutor_email'));
+    if auth.uid() is null or coalesce(auth.jwt()->>'is_anonymous', 'false') <> 'false' then
+        raise exception 'Please log in.' using errcode = '42501';
+    end if;
+    if p_student_ids is null or cardinality(p_student_ids) not between 1 and 50
+        or array_position(p_student_ids, null) is not null
+        or cardinality(p_student_ids) <> (select count(distinct id) from unnest(p_student_ids) id) then
+        raise exception 'Add between 1 and 50 students.' using errcode = '22023';
+    end if;
 
-    with sample_papers (
-        id, title, school_year, duration_minutes, status, question_ids
-    ) as (
-        values
-        (
-            '20000000-0000-4000-8000-000000000001'::uuid,
-            'Algebra Practice', 3, 20, 'draft',
-            array[
-                '10000000-0000-4000-8000-000000000001'::uuid,
-                '10000000-0000-4000-8000-000000000002'::uuid
-            ]
-        ),
-        (
-            '20000000-0000-4000-8000-000000000002'::uuid,
-            'Pythagoras Practice', 2, 15, 'reviewed',
-            array['10000000-0000-4000-8000-000000000003'::uuid]
-        )
-    ), inserted_papers as (
-        insert into public.papers (
-            id, tutor_id, title, subject, school_year, subject_level,
-            duration_minutes, status, questions_snapshot
-        )
-        select
-            p.id,
-            seed_tutor_id,
-            p.title,
-            'Mathematics',
-            p.school_year,
-            'G3',
-            p.duration_minutes,
-            p.status,
-            (
-                select jsonb_agg(
-                    jsonb_build_object(
-                        'paper_question_id', gen_random_uuid(),
-                        'source_question_id', q.id,
-                        'topics', q.topics,
-                        'difficulty', q.difficulty,
-                        'question_content', q.question_content,
-                        'solution', q.solution,
-                        'marking_rubric', q.marking_rubric
-                    )
-                    order by array_position(p.question_ids, q.id)
-                )
-                from public.questions as q
-                where q.id = any(p.question_ids)
-            )
-        from sample_papers as p
-        on conflict (id) do nothing
-        returning id
-    )
-    select coalesce(array_agg(id), array[]::uuid[]) into inserted_ids
-    from inserted_papers;
+    perform 1 from public.classes
+    where id = p_class_id and tutor_id = auth.uid() and not is_archived
+    for no key update;
+    if not found then
+        raise exception 'This class is unavailable.' using errcode = '42501';
+    end if;
 
-    update public.papers
-    set status = 'published'
-    where id = '20000000-0000-4000-8000-000000000002'
-        and id = any(inserted_ids);
+    for student_uuid in select id from unnest(p_student_ids) id order by id loop
+        select * into existing from public.students where id = student_uuid for no key update;
+        if found then
+            if existing.class_id <> p_class_id or not existing.is_active then
+                raise exception 'Create a new student for this class.' using errcode = '42501';
+            end if;
+            continue;
+        end if;
+        select c.colour || '-' || a.animal into code
+        from unnest(colours) c(colour) cross join unnest(animals) a(animal)
+        where not exists (
+            select 1 from public.students s
+            where s.class_id = p_class_id and s.student_code = c.colour || '-' || a.animal
+        )
+        order by random() limit 1;
+        if code is null then
+            raise exception 'No unused colour-animal codes remain for this class.' using errcode = 'P0001';
+        end if;
+        insert into public.students(id, class_id, student_code)
+        values (student_uuid, p_class_id, code);
+    end loop;
+
+    return query select s.* from public.students s
+    where s.class_id = p_class_id and s.id = any(p_student_ids) order by s.created_at, s.id;
 end;
-$seed_papers$;
+$$;
+revoke all on function public.add_class_students(uuid, uuid[]) from public, anon, authenticated;
+grant execute on function public.add_class_students(uuid, uuid[]) to authenticated;
 
+-- Calculate assignment summaries on demand.
+create or replace function public.list_assignments(p_class_id uuid default null)
+returns table (
+    id uuid, class_id uuid, paper_id uuid, share_token uuid, status text,
+    due_at timestamptz, published_at timestamptz, created_at timestamptz,
+    class_name text, title text, subject text, school_year smallint, subject_level text,
+    duration_minutes integer, question_count integer, student_count bigint, submitted_count bigint
+)
+language sql stable security invoker set search_path = '' as $$
+    select a.id, a.class_id, a.paper_id, a.share_token, a.status,
+        a.due_at, a.published_at, a.created_at, c.name, p.title, p.subject,
+        p.school_year, p.subject_level, p.duration_minutes, p.question_count,
+        (select count(*) from public.students s where s.class_id = a.class_id and s.is_active),
+        (select count(*) from public.submissions sub join public.students s on s.id = sub.student_id
+            where sub.assignment_id = a.id and s.is_active)
+    from public.assignments a
+    join public.classes c on c.id = a.class_id
+    join public.papers p on p.id = a.paper_id
+    where a.status in ('published', 'closed') and (p_class_id is null or a.class_id = p_class_id)
+    order by a.created_at desc, a.id;
+$$;
+revoke all on function public.list_assignments(uuid) from public, anon, authenticated;
+grant execute on function public.list_assignments(uuid) to authenticated;
+
+-- Publish all selected classes atomically.
+create or replace function public.publish_assignments(
+    p_paper_id uuid, p_class_ids uuid[], p_due_at timestamptz
+)
+returns setof public.assignments
+language plpgsql security invoker set search_path = '' as $$
+declare
+    paper_state text;
+begin
+    if auth.uid() is null or coalesce(auth.jwt()->>'is_anonymous', 'false') <> 'false' then
+        raise exception 'Please log in.' using errcode = '42501';
+    end if;
+    if p_class_ids is null or cardinality(p_class_ids) not between 1 and 50
+        or array_position(p_class_ids, null) is not null
+        or cardinality(p_class_ids) <> (select count(distinct id) from unnest(p_class_ids) id) then
+        raise exception 'Choose between 1 and 50 classes.' using errcode = '22023';
+    end if;
+    select status into paper_state from public.papers
+    where id = p_paper_id and tutor_id = auth.uid() and not is_deleted for update;
+    if not found or paper_state not in ('reviewed', 'published') then
+        raise exception 'Save and review the paper before publishing.' using errcode = '22023';
+    end if;
+    perform id from public.classes
+    where id = any(p_class_ids) and tutor_id = auth.uid() and not is_archived
+    order by id for no key update;
+    if (select count(*) from public.classes
+        where id = any(p_class_ids) and tutor_id = auth.uid() and not is_archived) <> cardinality(p_class_ids) then
+        raise exception 'One or more classes are unavailable.' using errcode = '42501';
+    end if;
+    if (p_due_at is null or p_due_at <= now()) and exists (
+        select 1 from unnest(p_class_ids) requested(class_id) where not exists (
+            select 1 from public.assignments a
+            where a.class_id = requested.class_id and a.paper_id = p_paper_id and a.status <> 'draft'
+        )
+    ) then
+        raise exception 'Choose a future submission deadline.' using errcode = '22023';
+    end if;
+    if paper_state = 'reviewed' then
+        update public.papers set status = 'published' where id = p_paper_id;
+    end if;
+    insert into public.assignments(class_id, paper_id, status, due_at)
+    select id, p_paper_id, 'published', p_due_at from unnest(p_class_ids) id
+    on conflict (class_id, paper_id) do update
+    set status = 'published', due_at = excluded.due_at
+    where public.assignments.status = 'draft';
+
+    return query select cp.* from public.assignments cp
+    where cp.paper_id = p_paper_id and cp.class_id = any(p_class_ids);
+end;
+$$;
+revoke all on function public.publish_assignments(uuid, uuid[], timestamptz)
+    from public, anon, authenticated;
+grant execute on function public.publish_assignments(uuid, uuid[], timestamptz) to authenticated;
+
+-- Only the backend can record student submissions.
+create or replace function public.record_student_submission(
+    p_token uuid, p_code text, p_id uuid, p_drawing jsonb, p_attachments jsonb
+)
+returns public.submissions
+language plpgsql security invoker set search_path = '' as $$
+declare
+    assignment public.assignments;
+    member public.students;
+    receipt public.submissions;
+begin
+    select * into assignment from public.assignments
+    where share_token = p_token and status = 'published' for update;
+    if not found then
+        raise exception 'This assignment is unavailable.' using errcode = 'P0001';
+    end if;
+    select * into member from public.students
+    where class_id = assignment.class_id and student_code = lower(btrim(p_code)) and is_active
+    for share;
+    if not found then
+        raise exception 'Check your student code with your tutor.' using errcode = 'P0001';
+    end if;
+    select * into receipt from public.submissions
+    where assignment_id = assignment.id and student_id = member.id;
+    if found then
+        if receipt.id = p_id then return receipt; end if;
+        raise exception 'Your work has already been submitted.' using errcode = '23505';
+    end if;
+    if assignment.due_at is not null and assignment.due_at <= now() then
+        raise exception 'The submission deadline has passed.' using errcode = 'P0001';
+    end if;
+    if not exists(select 1 from public.papers where id = assignment.paper_id and status = 'published') then
+        raise exception 'This assignment is unavailable.' using errcode = 'P0001';
+    end if;
+    insert into public.submissions(id, assignment_id, student_id, student_code, drawing, attachments)
+    values (p_id, assignment.id, member.id, member.student_code, p_drawing, p_attachments)
+    returning * into receipt;
+    return receipt;
+end;
+$$;
+revoke all on function public.record_student_submission(uuid, text, uuid, jsonb, jsonb)
+    from public, anon, authenticated;
+grant execute on function public.record_student_submission(uuid, text, uuid, jsonb, jsonb) to service_role;
+
+-- Private student photos.
+insert into storage.buckets(id, name, public, file_size_limit, allowed_mime_types)
+values ('student-solutions', 'student-solutions', false, 10485760, array['image/jpeg','image/png'])
+on conflict (id) do update set public = false,
+    file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+notify pgrst, 'reload schema';
 commit;
-
--- Expected on a fresh project: 5 questions and 2 papers.
--- Tutor count includes any existing email-based Auth accounts.
-select
-    (select count(*) from public.tutors) as tutors,
-    (select count(*) from public.questions) as questions,
-    (select count(*) from public.papers) as papers;
-
-select id, title, status, question_count, share_token
-from public.papers
-order by title;
-
--- Student-safe preview; no login, solutions or marking criteria.
-select public.get_student_paper(share_token) as student_preview
-from public.papers
-where id = '20000000-0000-4000-8000-000000000002';

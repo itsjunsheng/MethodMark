@@ -1,5 +1,12 @@
+import { mockAuth } from './helpers/auth';
 import { test, expect } from '@playwright/test';
-import questions from './fixtures/questions.json' with { type: 'json' };
+import bankFixture from './fixtures/questions.json' with { type: 'json' };
+import { selectPaperScope } from './helpers/paperBuilder';
+
+test.beforeEach(async ({ page }) => { await mockAuth(page, true); });
+
+// Put all content shapes in one scope for renderer regression coverage.
+const questions = bankFixture.map(question => ({ ...question, school_year: 3, subject_level: 'G3', difficulty: 'medium' }));
 
 const endpoint = '**/api/v1/sample-paper/questions';
 
@@ -8,25 +15,25 @@ for (const failure of [
   { name: 'backend failure', status: 503, body: { detail: 'The question bank is not connected.' }, message: 'The question bank is not connected.' },
 ]) {
   test(`${failure.name} stays in builder and allows retry`, async ({ page }) => {
-    let attempts = 0;
-    await page.route(endpoint, route => {
-      attempts += 1;
-      return route.fulfill({ status: attempts === 1 ? failure.status : 200, json: attempts === 1 ? failure.body : questions });
-    });
+    let failing = true;
+    await page.route(endpoint, route => route.fulfill({
+      status: failing ? failure.status : 200, json: failing ? failure.body : questions,
+    }));
     await page.goto('/');
     await page.getByRole('button', { name: 'Create practice paper', exact: true }).click();
-    await page.getByLabel('Paper title').fill('Retry paper');
-    await page.getByRole('button', { name: 'Generate sample paper' }).click();
     await expect(page.getByRole('alert')).toContainText(failure.message);
     await expect(page.locator('.question-card')).toHaveCount(0);
+    failing = false;
+    await page.getByRole('button', { name: 'Try again' }).click();
+    await selectPaperScope(page);
+    await page.getByLabel('Paper title').fill('Retry paper');
     await page.getByRole('button', { name: 'Generate sample paper' }).click();
     await expect(page.locator('.question-card')).toHaveCount(5);
     await expect(page.getByRole('heading', { name: 'Retry paper' })).toBeVisible();
-    expect(attempts).toBe(2);
   });
 }
 
-test('loads every bank question on click with parts, diagrams, exact rubrics and editable snapshots', async ({ page }) => {
+test('loads bank options and generates matching questions with parts, diagrams and editable snapshots', async ({ page }) => {
   let requests = 0;
   let release!: () => void;
   const ready = new Promise<void>(resolve => { release = resolve; });
@@ -37,14 +44,20 @@ test('loads every bank question on click with parts, diagrams, exact rubrics and
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Create practice paper', exact: true }).click();
-  expect(requests).toBe(0);
+  await expect(page.getByText('Loading question options...', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Generate sample paper' })).toBeDisabled();
+  release();
+  await selectPaperScope(page);
+  const loadedRequests = requests;
   await page.getByLabel('Paper title').fill('Live bank sample');
   await page.getByRole('button', { name: 'Generate sample paper' }).click();
-  await expect(page.getByRole('button', { name: 'Loading questions...' })).toBeDisabled();
-  release();
   const cards = page.locator('.question-card');
   await expect(cards).toHaveCount(5);
-  await expect(page.locator('.paper-detail-toolbar')).toContainText('12 marks');
+  await expect(page.getByRole('region', { name: 'Practice paper cover' })).toBeVisible();
+  await expect(page.locator('.exam-answer-line')).toHaveCount(6);
+  await expect(page.locator('.exam-document .question-level')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Print / Save PDF', exact: true })).toBeEnabled();
+  await expect(page.locator('.paper-modal .paper-toolbar')).toContainText('12 marks');
   await expect(cards.nth(0)).toContainText('Solve x');
   await expect(cards.nth(1)).toContainText('Find y when x = 4.');
   await expect(cards.nth(1)).toContainText('Find x when y = 20.');
@@ -57,8 +70,8 @@ test('loads every bank question on click with parts, diagrams, exact rubrics and
   await page.getByRole('button', { name: 'Show solutions & rubric' }).click();
   await expect(page.locator('.solution-box')).toHaveCount(5);
   await expect(page.locator('.marking-points li')).toHaveCount(12);
-  await expect(cards.nth(1)).toContainText('Correctly substitutes x = 4.');
-  await expect(cards.nth(2)).toContainText('AC = 5 cm');
+  await expect(page.locator('.exam-marking-question').nth(1)).toContainText('Correctly substitutes x = 4.');
+  await expect(page.locator('.exam-marking-question').nth(2)).toContainText('AC = 5 cm');
   await page.getByLabel('I have reviewed every question').check();
   await page.getByRole('button', { name: 'Edit paper' }).click();
   await cards.nth(1).getByRole('textbox', { name: 'Question text', exact: true }).nth(1).fill('Find y when x = 5.');
@@ -71,7 +84,7 @@ test('loads every bank question on click with parts, diagrams, exact rubrics and
   await page.getByRole('button').filter({ has: page.getByRole('heading', { name: 'Live bank sample' }) }).click();
   await expect(page.locator('.question-card').nth(1)).toContainText('Find y when x = 5.');
   await expect(diagram).toBeVisible();
-  expect(requests).toBe(1);
+  expect(requests).toBe(loadedRequests);
 });
 
 test('closing a pending request does not create a paper later', async ({ page }) => {
@@ -83,12 +96,11 @@ test('closing a pending request does not create a paper later', async ({ page })
   });
   await page.goto('/');
   await page.getByRole('button', { name: 'Create practice paper', exact: true }).click();
-  await page.getByLabel('Paper title').fill('Cancelled paper');
-  await page.getByRole('button', { name: 'Generate sample paper' }).click();
-  await expect(page.getByRole('button', { name: 'Loading questions...' })).toBeDisabled();
+  await expect(page.getByText('Loading question options...', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Generate sample paper' })).toBeDisabled();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   release();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.locator('.sidebar').getByRole('button', { name: 'Practice papers', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Cancelled paper' })).toHaveCount(0);
+  await expect(page.locator('.paper-card')).toHaveCount(0);
 });

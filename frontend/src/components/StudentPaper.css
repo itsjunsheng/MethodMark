@@ -1,0 +1,32 @@
+@media screen {
+  .student-preview-page.student-exam-page > main:has(> .student-welcome) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    padding-block: 24px;
+  }
+  .student-exam-page > main > .student-welcome {
+    width: min(580px, 100%);
+    margin: auto;
+  }
+}
+
+.student-exam-paper { overflow: visible; }
+.student-exam-toolbar { position: sticky; top: 0; z-index: 5; border-radius: 12px 12px 0 0; box-shadow: 0 3px 8px #233c2908; }
+.student-exam-paper > .exam-paper-stage { border-radius: 0 0 12px 12px; }
+.exam-answer-space { position: relative; }
+.handwriting-area { position: absolute; inset: 0; display: block; width: 100%; height: 100%; user-select: none; -webkit-user-select: none; }
+.handwriting-area path { pointer-events: none; }
+.handwriting-scroll { touch-action: auto; }
+.handwriting-pen, .handwriting-eraser { touch-action: none; }
+.handwriting-pen { cursor: crosshair; }
+.handwriting-eraser { cursor: cell; }
+.handwriting-pen:hover, .handwriting-eraser:hover { outline: 1px dashed #9caeaa; outline-offset: 2px; }
+.student-photo-option { margin-top: 20px; }
+.student-photo-option summary { cursor: pointer; color: #315c4b; font-size: 13px; padding: 8px 0; }
+.student-photo-option .upload-area { margin-top: 12px; }
+.student-photo-option input[type="file"] { max-width: 100%; }
+.student-photo-option .file-chosen { overflow-wrap: anywhere; }
+@media print {
+  .handwriting-area { outline: none !important; }
+}

@@ -16,7 +16,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         version=__version__,
         description=(
             "MethodMark application health and local sample-paper question bank. "
-            "Tutor authentication, paper persistence and AI pipelines are not implemented."
+            "Tutor access uses Supabase Auth. "
+            "Account-free student paper access and submission storage."
         ),
         docs_url="/api/docs",
         redoc_url="/api/redoc",

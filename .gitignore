@@ -7,6 +7,7 @@ playwright-report/
 
 # Local configuration: ignore every .env file and variant in all directories
 .env*
+!.env.example
 
 # Python environments and generated files
 .venv/

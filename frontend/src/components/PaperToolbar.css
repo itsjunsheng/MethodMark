@@ -31,8 +31,6 @@
 .paper-toolbar-action.btn[aria-pressed="true"] { background: #315c4b; border-color: #315c4b; color: #fff; }
 .paper-toolbar-action.btn[aria-pressed="true"]:hover { background: #294e3f; }
 .paper-toolbar-action.btn:disabled { opacity: .4; cursor: default; }
-.paper-toolbar .paper-delete { color: #a56554; }
-.paper-toolbar .paper-delete:hover:not(:disabled) { background: #fcf2ef; border-color: #dfbfb6; }
 .paper-toolbar-icon.btn { width: 32px; padding: 0; }
 .paper-toolbar-icon .paper-toolbar-label { display: none; }
 .paper-toolbar-divider { flex-shrink: 0; width: 1px; height: 18px; margin: 0 3px; background: #e4e9e3; }

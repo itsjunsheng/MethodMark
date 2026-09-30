@@ -56,31 +56,6 @@ test('a paper must be reviewed before it can be published and persists after rel
   await expect(page.getByRole('button', { name: 'Weekly algebra checkpoint', exact: true })).toBeVisible();
 });
 
-test('review requires every question, validates marks, saves draft, and confirms release', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Let’s review' }).click();
-  await page.getByRole('button', { name: 'Review', exact: true }).first().click();
-  await expect(page.getByRole('button', { name: 'Approve & release' })).toBeDisabled();
-  await page.getByLabel('Accuracy marks').fill('4');
-  await page.getByLabel('I’ve checked the working').check();
-  await expect(page.getByRole('button', { name: 'Approve & release' })).toBeDisabled();
-  await page.getByLabel('Accuracy marks').fill('1');
-  await page.getByLabel('I’ve checked the working').check();
-  await page.getByRole('button', { name: 'Save draft' }).click();
-  await page.getByRole('button', { name: 'Review', exact: true }).first().click();
-  await expect(page.getByLabel('I’ve checked the working')).toBeChecked();
-  for (let i = 2; i <= 4; i++) {
-    await page.getByRole('button', { name: `Question ${i}`, exact: true }).click();
-    await page.getByLabel('I’ve checked the working').check();
-  }
-  await page.getByRole('button', { name: 'Approve & release' }).click();
-  await expect(page.getByText('Release 12/12 to Chloe Tan?')).toBeVisible();
-  await page.getByRole('button', { name: 'Confirm release' }).click();
-  await page.locator('.tabs').getByRole('button', { name: /Released/ }).click();
-  await expect(page.getByRole('button', { name: 'View result' })).toBeVisible();
-  await page.reload();
-  await expect(page.locator('.nav-count')).toHaveText('7');
-});
 
 test('report export downloads', async ({ page }) => {
   await page.goto('/');

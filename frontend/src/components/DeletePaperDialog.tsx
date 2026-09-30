@@ -17,7 +17,7 @@ export function DeletePaperDialog({ paper, onClose, onDeleted }: {
     try {
       await deletePaper(paper.id);
       onDeleted();
-      toast.success('Paper deleted from your library.');
+      toast.success('Paper permanently deleted.');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Could not delete this paper. Please try again.');
     } finally { setDeleting(false); }
@@ -25,8 +25,8 @@ export function DeletePaperDialog({ paper, onClose, onDeleted }: {
 
   return <Modal title="Delete paper?" className="paper-delete-dialog" onClose={() => { if (!deleting) onClose(); }}>
     <div className="modal-body">
-      <p>Delete <strong>{paper.title}</strong> from your practice paper library?</p>
-      <p>Existing class assignments and student submissions will remain available.</p>
+      <p>Permanently delete <strong>{paper.title}</strong>, including its class assignments and submitted work?</p>
+      <p>This cannot be undone. Archive the paper instead if you want to keep these records.</p>
       <div className="modal-actions">
         <button className="btn secondary" disabled={deleting} onClick={onClose}>Cancel</button>
         <button className="btn confirm-danger" disabled={deleting} onClick={() => void confirmDelete()}>

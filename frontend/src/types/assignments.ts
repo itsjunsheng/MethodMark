@@ -14,7 +14,7 @@ export type SubmissionSummary = {
   students: { name: string | null };
 };
 export type Submission = SubmissionSummary & {
-  drawing: InkDrawing; attachments: { path: string; name: string; mime_type: string }[];
+  drawing: InkDrawing; drawing_sizes?: Record<string, [number, number]>; attachments: { path: string; name: string; mime_type: string }[];
 };
 export type StudentAssignment = {
   id: string; title: string; class_name: string; due_at: string | null;

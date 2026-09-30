@@ -13,8 +13,8 @@ create table public.classes (
         references auth.users(id) on delete cascade,
     name text not null check (length(btrim(name)) between 1 and 100),
     color text not null default
-        (array['sage','blue','lavender','rose','peach','sand'])[1 + floor(random() * 6)::integer]
-        check (color in ('sage','blue','lavender','rose','peach','sand')),
+        (array['sage','blue','lavender','rose','peach','sand','teal','mint','sky','indigo','plum','slate'])[1 + floor(random() * 12)::integer]
+        check (color in ('sage','blue','lavender','rose','peach','sand','teal','mint','sky','indigo','plum','slate')),
 
     subject text not null check (subject in ('Mathematics', 'Additional Mathematics')),
     school_year smallint not null check (school_year between 1 and 5),
@@ -77,17 +77,17 @@ create table public.papers (
         references auth.users(id) on delete cascade,
     title text not null check (length(btrim(title)) between 1 and 200),
     color text not null default
-        (array['sage','blue','lavender','rose','peach','sand'])[1 + floor(random() * 6)::integer]
-        check (color in ('sage','blue','lavender','rose','peach','sand')),
+        (array['sage','blue','lavender','rose','peach','sand','teal','mint','sky','indigo','plum','slate'])[1 + floor(random() * 12)::integer]
+        check (color in ('sage','blue','lavender','rose','peach','sand','teal','mint','sky','indigo','plum','slate')),
 
     subject text not null check (subject in ('Mathematics', 'Additional Mathematics')),
     school_year smallint not null check (school_year between 1 and 5),
     subject_level text not null check (subject_level in ('G1', 'G2', 'G3')),
     duration_minutes integer not null check (duration_minutes > 0),
     instructions text not null default 'Answer all questions. Show your working clearly.',
-    is_deleted boolean not null default false,
+    is_archived boolean not null default false,
     status text not null default 'draft'
-        check (status in ('draft', 'reviewed', 'published', 'archived')),
+        check (status in ('draft', 'reviewed', 'published')),
     questions_snapshot jsonb not null default '[]'::jsonb
         check (jsonb_typeof(questions_snapshot) = 'array'),
     question_count integer
@@ -127,6 +127,7 @@ create table public.submissions (
     student_id uuid not null references public.students(id) on delete cascade,
     student_code text not null,
     drawing jsonb not null default '{}'::jsonb check (jsonb_typeof(drawing) = 'object'),
+    drawing_sizes jsonb not null default '{}'::jsonb check (jsonb_typeof(drawing_sizes) = 'object'),
     attachments jsonb not null default '[]'::jsonb
         check (jsonb_typeof(attachments) = 'array' and jsonb_array_length(attachments) <= 5),
     submitted_at timestamptz not null default now(),
@@ -194,7 +195,7 @@ begin
 
     new.published_at := old.published_at;
     if old.published_at is not null then
-        if content_changed or new.status not in ('published', 'archived') then
+        if content_changed or new.status <> 'published' then
             raise exception 'Published content is frozen; create a new draft copy to edit it';
         end if;
     elsif new.status = 'published' then
@@ -226,6 +227,14 @@ begin
     end if;
 
     if new.status = 'published' then
+        if (tg_op = 'INSERT' or old.status <> 'published') and (
+            not exists (select 1 from public.classes
+                where id = new.class_id and tutor_id = new.tutor_id and not is_archived)
+            or not exists (select 1 from public.papers
+                where id = new.paper_id and tutor_id = new.tutor_id and not is_archived)
+        ) then
+            raise exception 'Restore the class and paper before assigning' using errcode = '22023';
+        end if;
         if not exists (
             select 1 from public.papers
             where id = new.paper_id and tutor_id = new.tutor_id and status = 'published'
@@ -302,7 +311,7 @@ with check (tutor_id = (select auth.uid())
 
 create policy papers_delete on public.papers for delete to authenticated
 using (tutor_id = (select auth.uid())
-    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false' and status = 'draft');
+    and coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false');
 
 create policy assignments_select on public.assignments for select to authenticated
 using (tutor_id = (select auth.uid())
@@ -437,7 +446,7 @@ begin
         raise exception 'Choose between 1 and 50 classes.' using errcode = '22023';
     end if;
     select status into paper_state from public.papers
-    where id = p_paper_id and tutor_id = auth.uid() and not is_deleted for update;
+    where id = p_paper_id and tutor_id = auth.uid() and not is_archived for update;
     if not found or paper_state not in ('reviewed', 'published') then
         raise exception 'Save and review the paper before publishing.' using errcode = '22023';
     end if;
@@ -475,7 +484,8 @@ grant execute on function public.publish_assignments(uuid, uuid[], timestamptz) 
 
 -- Only the backend can record student submissions.
 create or replace function public.record_student_submission(
-    p_token uuid, p_code text, p_id uuid, p_drawing jsonb, p_attachments jsonb
+    p_token uuid, p_code text, p_id uuid, p_drawing jsonb, p_attachments jsonb,
+    p_drawing_sizes jsonb default '{}'::jsonb
 )
 returns public.submissions
 language plpgsql security invoker set search_path = '' as $$
@@ -507,21 +517,88 @@ begin
     if not exists(select 1 from public.papers where id = assignment.paper_id and status = 'published') then
         raise exception 'This assignment is unavailable.' using errcode = 'P0001';
     end if;
-    insert into public.submissions(id, assignment_id, student_id, student_code, drawing, attachments)
-    values (p_id, assignment.id, member.id, member.student_code, p_drawing, p_attachments)
+    insert into public.submissions(id, assignment_id, student_id, student_code, drawing, attachments, drawing_sizes)
+    values (p_id, assignment.id, member.id, member.student_code, p_drawing, p_attachments, p_drawing_sizes)
     returning * into receipt;
     return receipt;
 end;
 $$;
-revoke all on function public.record_student_submission(uuid, text, uuid, jsonb, jsonb)
+revoke all on function public.record_student_submission(uuid, text, uuid, jsonb, jsonb, jsonb)
     from public, anon, authenticated;
-grant execute on function public.record_student_submission(uuid, text, uuid, jsonb, jsonb) to service_role;
+grant execute on function public.record_student_submission(uuid, text, uuid, jsonb, jsonb, jsonb) to service_role;
 
 -- Private student photos.
 insert into storage.buckets(id, name, public, file_size_limit, allowed_mime_types)
 values ('student-solutions', 'student-solutions', false, 10485760, array['image/jpeg','image/png'])
 on conflict (id) do update set public = false,
     file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+-- Durable grading queue; AI results remain private and provisional.
+create table if not exists public.grading_jobs (
+    submission_id uuid primary key references public.submissions(id) on delete cascade,
+    status text not null default 'queued' check (status in ('queued','processing','awaiting_review','failed')),
+    flagged boolean not null default false,
+    attempts integer not null default 0,
+    lease_token uuid,
+    lease_expires_at timestamptz,
+    result jsonb check (result is null or jsonb_typeof(result) = 'object'),
+    review_draft jsonb check (review_draft is null or jsonb_typeof(review_draft) = 'object'),
+    review_saved_at timestamptz,
+    error text,
+    provider text,
+    vision_model text,
+    grading_model text,
+    version integer not null default 0,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+create index if not exists grading_jobs_queue_idx on public.grading_jobs(status, created_at);
+alter table public.grading_jobs enable row level security;
+revoke all on public.grading_jobs from public, anon, authenticated;
+grant select on public.grading_jobs to authenticated;
+grant all on public.grading_jobs to service_role;
+drop policy if exists grading_owner on public.grading_jobs;
+create policy grading_owner on public.grading_jobs for select to authenticated
+using (coalesce((select auth.jwt()->>'is_anonymous'), 'false') = 'false' and exists (
+    select 1 from public.submissions s join public.assignments a on a.id = s.assignment_id
+    where s.id = submission_id and a.tutor_id = (select auth.uid())
+));
+
+create or replace function public.methodmark_enqueue_grading()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+    insert into public.grading_jobs(submission_id) values (new.id) on conflict do nothing;
+    return new;
+end;
+$$;
+revoke all on function public.methodmark_enqueue_grading() from public, anon, authenticated;
+drop trigger if exists submissions_enqueue_grading on public.submissions;
+create trigger submissions_enqueue_grading after insert on public.submissions
+for each row execute function public.methodmark_enqueue_grading();
+insert into public.grading_jobs(submission_id)
+select id from public.submissions on conflict do nothing;
+
+-- Claims survive restarts; stale workers cannot overwrite a newer attempt.
+create or replace function public.claim_grading_job()
+returns setof public.grading_jobs language plpgsql security invoker set search_path = '' as $$
+begin
+    update public.grading_jobs set status = 'failed', lease_token = null, lease_expires_at = null,
+        error = 'Processing was interrupted repeatedly. Retry grading or mark manually.',
+        version = version + 1, updated_at = now()
+    where status = 'processing' and lease_expires_at < now() and attempts >= 3;
+    return query
+    update public.grading_jobs j set status = 'processing', attempts = attempts + 1,
+        lease_token = gen_random_uuid(), lease_expires_at = now() + interval '10 minutes',
+        error = null, version = version + 1, updated_at = now()
+    where j.submission_id = (
+        select q.submission_id from public.grading_jobs q
+        where q.status = 'queued' or (q.status = 'processing' and q.lease_expires_at < now())
+        order by q.created_at for update skip locked limit 1
+    ) returning j.*;
+end;
+$$;
+revoke all on function public.claim_grading_job() from public, anon, authenticated;
+grant execute on function public.claim_grading_job() to service_role;
 
 notify pgrst, 'reload schema';
 commit;

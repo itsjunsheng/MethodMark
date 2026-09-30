@@ -10,6 +10,7 @@ export type ClassDetails = {
 
 export type TutorClass = ClassDetails & {
   id: string;
+  is_archived?: boolean;
   students: { count: number }[];
 };
 

@@ -89,4 +89,18 @@ Run the updated `supabase/setup.sql` against a fresh application schema before u
 
 Submissions accept ink keyed by question/part IDs, plus up to five verified JPEG/PNG files of 10 MB and 25 megapixels each. Photos are uploaded before recording the receipt. Failed partial uploads are cleaned up when possible; uncertain network failures keep private objects so committed submissions are never deleted. The system does not yet have scheduled cleanup for orphaned storage objects (including objects from deleted classes).
 
-Students do not create accounts. Public access is rate-limited to 120 requests per minute per IP in each process. A production multi-worker deployment should use a shared limiter and a request-body limit at its reverse proxy. Each student belongs to one class; the public endpoints validate that class, its active student code and the assignment; answer keys never enter their responses. Submissions close at the deadline; late uploads cannot bypass the final database check. AI grading is not connected.
+Students do not create accounts. Public access is rate-limited to 120 requests per minute per IP in each process. A production multi-worker deployment should use a shared limiter and a request-body limit at its reverse proxy. Each student belongs to one class; the public endpoints validate that class, its active student code and the assignment; answer keys never enter their responses. Submissions close at the deadline; late uploads cannot bypass the final database check. AI grading runs in a separate worker; see [grading setup](app/grading/README.md).
+
+## Grading worker
+
+Run `supabase/update.sql` for the existing database, configure `OPENAI_API_KEY` or
+`OPENROUTER_API_KEY` in `backend/.env`, and start a separate process from `backend/`:
+
+```sh
+uv run python -m app.grading.worker
+```
+
+[Grading setup and architecture](app/grading/README.md) describes models, states, retries and limits.
+Authenticated tutor routes are `GET /api/v1/grading`, `GET /api/v1/grading/{id}`,
+`POST /api/v1/grading/{id}/retry`, and `PUT /api/v1/grading/{id}/review`.
+Results stop at private review drafts; nothing is released to students.

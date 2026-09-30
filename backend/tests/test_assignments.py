@@ -149,6 +149,7 @@ def test_submits_ink_and_verified_image_without_login():
                 "student_code": "blue-otter",
                 "submission_id": SUBMISSION,
                 "drawing": json.dumps(DRAWING),
+                "drawing_sizes": json.dumps({'["q1","main"]': [400, 200]}),
             },
             files={"files": ("work.png", image.getvalue(), "image/png")},
         )
@@ -156,6 +157,7 @@ def test_submits_ink_and_verified_image_without_login():
         assert result.json()["id"] == SUBMISSION
     args = db.submit.await_args.args
     assert str(args[2]) == SUBMISSION
+    assert args[5] == {'["q1","main"]': [400, 200]}
     assert args[3] == DRAWING
     assert args[4][0][1] == "image/png"
 

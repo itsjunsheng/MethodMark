@@ -92,7 +92,7 @@ async def submit_assignment(token: UUID, request: Request, db: Store, limited: P
         raise HTTPException(400, "Invalid request size.") from None
     if size > 55 * 1024 * 1024:
         raise HTTPException(413, "Submit up to 5 photos, 10 MB each.")
-    async with request.form(max_files=5, max_fields=3, max_part_size=2 * 1024 * 1024) as form:
+    async with request.form(max_files=5, max_fields=4, max_part_size=2 * 1024 * 1024) as form:
         try:
             code = StudentCode(student_code=form.get("student_code")).student_code
             submission_id = UUID(str(form.get("submission_id")))
@@ -100,6 +100,7 @@ async def submit_assignment(token: UUID, request: Request, db: Store, limited: P
             if not isinstance(raw, str) or len(raw) > 2 * 1024 * 1024:
                 raise ValueError
             drawing = json.loads(raw)
+            drawing_sizes = json.loads(str(form.get("drawing_sizes", "{}")))
         except (ValueError, TypeError):
             raise HTTPException(422, "Check your student code and submission.") from None
         files = []
@@ -128,7 +129,7 @@ async def submit_assignment(token: UUID, request: Request, db: Store, limited: P
                     422, "Choose readable JPG or PNG photos up to 25 megapixels."
                 ) from None
             files.append(((upload.filename or "Solution")[:200], mime, content))
-        return await db.submit(token, code, submission_id, drawing, files)
+        return await db.submit(token, code, submission_id, drawing, files, drawing_sizes)
 
 
 @router.get("/submissions/{submission_id}/attachments")

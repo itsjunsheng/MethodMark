@@ -110,25 +110,27 @@ Choose **Pen** to write with a stylus or mouse, **Eraser** to remove whole strok
 
 `StudentPaper.tsx` owns the student controls and photo selection. `HandwritingArea.tsx` handles pointer input and renders SVG strokes with no drawing dependency. `useHandwriting.ts` handles undo/redo and local persistence. Points use coordinates relative to their answer space, keyed by question and part IDs, so pagination does not move answers between questions.
 
-Handwriting saves after every completed stroke, erase, undo, or redo under `methodmark:handwriting:v1:<assignment>:<paper>:<student>`. Reopening the same assignment with the same code in the same browser restores the draft. Undo history is limited to 50 edits and lasts for the current session. Storage failures are shown explicitly and leave ink visible for printing. Photo files remain in memory only and need reattaching after refresh. **Submit work** sends ink and up to five JPG/PNG photos (10 MB each) to the backend. Photos are stored privately before a submission receipt is recorded. Retries reuse a submission ID; successful submissions become read-only. AI grading is not triggered.
+Handwriting saves after every completed stroke, erase, undo, or redo under `methodmark:handwriting:v1:<assignment>:<paper>:<student>`. Reopening the same assignment with the same code in the same browser restores the draft. Undo history is limited to 50 edits and lasts for the current session. Storage failures are shown explicitly and leave ink visible for printing. Photo files remain in memory only and need reattaching after refresh. **Submit work** sends ink and up to five JPG/PNG photos (10 MB each) to the backend. Photos are stored privately before a submission receipt is recorded. Retries reuse a submission ID; successful submissions become read-only. The submission transaction queues AI grading; start the separate backend grading worker to process it.
 
 Browser checks cover mouse and emulated pen/touch input, scrolling, per-part writing, erasing, undo/redo, draft restoration/isolation, storage failure, photo fallback, and unchanged tutor/student paper content and dimensions. Actual iPad/Apple Pencil hardware still needs a device check.
 
 
 ## Paper and class colours
 
-New papers and classes receive a random colour from a shared
-six-colour palette. Use **Colour** on a card, or inside a class, to change it.
-Selections are stored in Supabase and do not alter question content or review status.
+New papers and classes receive a random colour from the shared 12-colour palette.
+Their shared `ItemCard` and `ItemMenu` provide colour, archive/restore and delete actions.
+The archive button beside each create button opens archived items.
+Archiving keeps the records, published assignments and student links available;
+restore an item before assigning it to a new class or adding students to it.
+Paper review/publication status is separate from `is_archived`.
 
-Open a paper and choose **Delete paper** in its top toolbar to remove it from the library after confirmation. Class and paper cards share `ItemCard` for their colour, icon and opening controls.
-Deletion sets `papers.is_deleted`; existing assignments, student links and submissions
-remain available. Deleted papers cannot be published to new classes.
+Delete requires confirmation and permanently removes the record and its dependent
+assignments and submissions. Deleting a class also deletes its students; deleting a
+paper leaves the classes and question bank intact.
 
-For an existing database, run `supabase/update_papers_and_classes.sql` in the SQL
-Editor. It adds the colour fields and library deletion flag, gives tutors permission
-to change class colours, and updates the publishing function. It does not delete data.
-Fresh databases use the updated `setup.sql`.
+Run `supabase/update.sql` for an existing database. It expands the palette,
+adds the paper archive flag, migrates older hidden papers into the archive and
+allows tutors to permanently delete their own papers. Fresh databases use `setup.sql`.
 
 ## Classes and students
 
@@ -147,3 +149,11 @@ The trash icon removes a student from the roster and disables their code after
 confirmation. Submitted work remains available. The code is not reassigned.
 **Delete class** permanently removes that class's students, assignments and
 submission records. Other classes and practice papers are preserved.
+
+## Marking queue
+
+Real submissions are loaded through authenticated `/api/v1/grading` endpoints. The list
+refreshes every 15 seconds while visible. `MarkingQueue` handles filters and retries;
+`GradingReview` displays original work, transcription, rubric points, confidence and editable
+feedback. Saving creates a private review draft. There is no result release action yet.
+See [grading setup](../backend/app/grading/README.md) for the SQL update and worker command.

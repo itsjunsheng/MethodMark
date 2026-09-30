@@ -1,12 +1,13 @@
 import { ArrowUpRight, Clock3, FileText } from 'lucide-react';
 import type { Paper } from '../data';
 import { ItemCard } from './ItemCard';
+import type { ItemActions } from './ItemMenu';
 
-export function PaperCard({ paper, onOpen, onColour }: {
-  paper: Paper; onOpen: () => void; onColour: () => void;
+export function PaperCard({ paper, onOpen, ...actions }: ItemActions & {
+  paper: Paper; onOpen: () => void;
 }) {
   return <ItemCard className="paper-card" title={paper.title} colour={paper.color} icon={FileText}
-    openLabel={'Open paper ' + paper.title} onOpen={onOpen} onColour={onColour}>
+    kind="paper" archived={paper.is_archived} openLabel={'Open paper ' + paper.title} onOpen={onOpen} {...actions}>
     <span className="paper-meta"><span>{paper.level} / {paper.subject.startsWith('Additional') ? 'A-Math' : 'E-Math'}</span>
       <span className={'badge ' + (paper.approved ? 'green' : 'gray')}><span className="badge-dot" />
         {paper.status === 'published' ? 'Published' : paper.approved ? 'Reviewed' : 'Draft'}

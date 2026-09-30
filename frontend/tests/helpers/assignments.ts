@@ -5,13 +5,13 @@ import type { ClassAssignment } from '../../src/types/assignments';
 import { mockClasses } from './classes';
 
 type SavedPaper = {
-  color?: string; is_deleted?: boolean;
+  color?: string; is_archived?: boolean;
   id: string; title: string; subject: string; school_year: number; subject_level: string;
   duration_minutes: number; instructions: string; status: string; questions_snapshot: Paper['questions'];
   question_count: number; created_at: string; updated_at: string;
 };
 type Work = { id: string; assignment_id: string; student_id: string; student_code: string;
-  submitted_at: string; drawing: object; attachments: object[]; students: { name: string | null } };
+  submitted_at: string; drawing: object; drawing_sizes?: Record<string, [number, number]>; attachments: object[]; students: { name: string | null } };
 export const testToken = '30000000-0000-4000-8000-000000000001';
 
 export async function mockAssignments(page: Page, school?: Awaited<ReturnType<typeof mockClasses>>) {
@@ -26,22 +26,30 @@ export async function mockAssignments(page: Page, school?: Awaited<ReturnType<ty
     const request = route.request(), url = new URL(request.url()), table = url.pathname.split('/').at(-1);
     const id = url.searchParams.get('id')?.replace('eq.', '');
     if (table === 'papers') {
+      if (request.method() === 'DELETE') {
+        if (state.failSave) return route.fulfill({ status: 503, json: { message: 'Delete failed' } });
+        const removed = state.assignments.filter(a => a.paper_id === id).map(a => a.id);
+        state.papers = state.papers.filter(p => p.id !== id);
+        state.assignments = state.assignments.filter(a => a.paper_id !== id);
+        state.submissions = state.submissions.filter(s => !removed.includes(s.assignment_id));
+        return route.fulfill({ json: { id } });
+      }
       if (request.method() === 'POST' || request.method() === 'PATCH') {
         if (state.failSave) return route.fulfill({ status: 503, json: { message: 'Save failed' } });
         const body = request.postDataJSON();
         const existing = state.papers.find(p => p.id === (body.id ?? id));
-        const row = { is_deleted: false, ...existing, ...body, id: body.id ?? id, created_at: existing?.created_at ?? new Date().toISOString(),
+        const row = { is_archived: false, ...existing, ...body, id: body.id ?? id, created_at: existing?.created_at ?? new Date().toISOString(),
           updated_at: new Date().toISOString(), question_count: (body.questions_snapshot ?? existing?.questions_snapshot ?? []).length };
         state.papers = [row, ...state.papers.filter(p => p.id !== row.id)];
         return route.fulfill({ json: row });
       }
-      return route.fulfill({ json: id ? state.papers.find(p => p.id === id) : state.papers.filter(p => url.searchParams.get('is_deleted') !== 'eq.false' || !p.is_deleted) });
+      return route.fulfill({ json: id ? state.papers.find(p => p.id === id) : state.papers.filter(p => url.searchParams.get('is_archived') !== 'eq.false' || !p.is_archived) });
     }
     if (table === 'publish_assignments') {
       if (state.failPublish) return route.fulfill({ status: 503, json: { message: 'Publish failed' } });
       const body = request.postDataJSON();
       const paper = state.papers.find(p => p.id === body.p_paper_id)!;
-      if (paper.is_deleted) return route.fulfill({ status: 400, json: { code: '22023', message: 'Save and review the paper before publishing.' } });
+      if (paper.is_archived) return route.fulfill({ status: 400, json: { code: '22023', message: 'Save and review the paper before publishing.' } });
       paper.status = 'published';
       for (const classId of body.p_class_ids) {
         if (state.assignments.some(a => a.class_id === classId && a.paper_id === paper.id)) continue;
@@ -101,7 +109,7 @@ export async function mockAssignments(page: Page, school?: Awaited<ReturnType<ty
     const field = (name: string) => body.split('name="' + name + '"\r\n\r\n')[1]?.split('\r\n')[0];
     const code = field('student_code')!, member = school!.students.find(m => m.class_id === assignment.class_id && m.student_code === code && m.is_active)!;
     const work: Work = { id: field('submission_id')!, assignment_id: assignment.id, student_id: member.id,
-      student_code: code, submitted_at: new Date().toISOString(), drawing: JSON.parse(field('drawing')!),
+      student_code: code, submitted_at: new Date().toISOString(), drawing: JSON.parse(field('drawing')!), drawing_sizes: JSON.parse(field('drawing_sizes') ?? '{}'),
       attachments: [], students: { name: school!.students.find(s => s.id === member.id)?.name ?? null } };
     state.submissions.push(work);
     return route.fulfill({ json: { id: work.id, submitted_at: work.submitted_at } });

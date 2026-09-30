@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import type { Student } from '../../src/types/classes';
 
-type ClassRow = { color?: string; id: string; name: string; subject: string; school_year: number; subject_level: string };
+type ClassRow = { is_archived?: boolean; color?: string; id: string; name: string; subject: string; school_year: number; subject_level: string };
 
 export async function mockClasses(page: Page) {
   const state = {
@@ -41,7 +41,7 @@ export async function mockClasses(page: Page) {
         state.deletedClasses.push(id!);
         state.classes = state.classes.filter(item => item.id !== id);
         state.students = state.students.filter(row => row.class_id !== id);
-        return route.fulfill({ status: 204, body: '' });
+        return route.fulfill({ json: { id } });
       }
       if (method === 'POST') {
         const row = request.postDataJSON() as ClassRow;
@@ -49,7 +49,7 @@ export async function mockClasses(page: Page) {
         return route.fulfill({ status: 201, body: '' });
       }
       expect(url.searchParams.get('students.is_active')).toBe('eq.true');
-      return route.fulfill({ json: id ? withCount(state.classes.find(item => item.id === id)!) : state.classes.map(withCount) });
+      return route.fulfill({ json: id ? withCount(state.classes.find(item => item.id === id)!) : state.classes.filter(row => !url.searchParams.has('is_archived') || !!row.is_archived === (url.searchParams.get('is_archived') === 'eq.true')).map(withCount) });
     }
     if (table === 'students') {
       if (method === 'PATCH') {

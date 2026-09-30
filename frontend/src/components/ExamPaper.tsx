@@ -18,7 +18,7 @@ type ExamPaperProps = {
 };
 
 function AnswerSpace({ marks, label, area, description, handwriting }: { marks: number; label?: string | null; area: string; description: string; handwriting?: Handwriting }) {
-  return <div className="exam-answer-space">
+  return <div className="exam-answer-space" data-answer-area={area}>
     <div className="exam-working-space" style={{ minHeight: `${Math.max(3, Math.min(marks + 1, 8)) * 28}px` }} aria-hidden="true" />
     <div className="exam-answer-line">
       <span>Answer {label}</span><span className="exam-answer-dots" aria-hidden="true" /><span>[{marks}]</span>

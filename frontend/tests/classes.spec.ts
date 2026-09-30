@@ -176,13 +176,17 @@ test('class deletion removes its students and preserves other classes', async ({
   );
   await page.goto('/'); await openClasses(page);
   await page.getByRole('button', { name: 'Open class Saturday maths', exact: true }).click();
+  if (await page.getByRole('button', { name: 'All classes', exact: true }).isVisible()) await page.getByRole('button', { name: 'All classes', exact: true }).click();
+  await page.getByRole('button', { name: 'Options for Saturday maths', exact: true }).click();
   await page.getByRole('button', { name: 'Delete class', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete class?' });
   await expect(dialog.getByText('Saturday maths', { exact: true })).toBeVisible();
   await expect(dialog.getByText(/students, assignments and submitted work/)).toBeVisible();
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(state.deletedClasses).toHaveLength(0);
-  await expect(page.locator('.roster-list > li')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Open class Saturday maths', exact: true })).toContainText('2 students');
+  if (await page.getByRole('button', { name: 'All classes', exact: true }).isVisible()) await page.getByRole('button', { name: 'All classes', exact: true }).click();
+  await page.getByRole('button', { name: 'Options for Saturday maths', exact: true }).click();
   await page.getByRole('button', { name: 'Delete class', exact: true }).click();
   await dialog.getByRole('button', { name: 'Delete class', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your classes', exact: true })).toBeVisible();
@@ -202,6 +206,8 @@ test('failed class deletion keeps the class and can be retried', async ({ page }
   const state = await mockClasses(page);
   await page.goto('/'); await openClasses(page); await create(page);
   state.failDeleteClass = true;
+  if (await page.getByRole('button', { name: 'All classes', exact: true }).isVisible()) await page.getByRole('button', { name: 'All classes', exact: true }).click();
+  await page.getByRole('button', { name: 'Options for Saturday maths', exact: true }).click();
   await page.getByRole('button', { name: 'Delete class', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Delete class?' });
   await dialog.getByRole('button', { name: 'Delete class', exact: true }).click();
@@ -231,6 +237,8 @@ for (const width of [390, 768]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.getByRole('dialog').getByRole('button', { name: 'Remove from class', exact: true }).click();
     await expect(page.locator('.roster-list > li')).toHaveCount(1);
+    if (await page.getByRole('button', { name: 'All classes', exact: true }).isVisible()) await page.getByRole('button', { name: 'All classes', exact: true }).click();
+    await page.getByRole('button', { name: 'Options for Saturday maths', exact: true }).click();
     await page.getByRole('button', { name: 'Delete class', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Delete class?' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

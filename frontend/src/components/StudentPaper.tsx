@@ -45,7 +45,12 @@ export function StudentPaper({ token, access }: { token: string; access: Student
     if (readOnly || !hasWork) return;
     setSubmitting(true); toast.dismiss();
     try {
-      const receipt = await submitStudentAssignment(token, studentCode, submissionId, ink.drawing, files);
+      const drawingSizes: Record<string, [number, number]> = {};
+      document.querySelectorAll<HTMLElement>('[data-answer-area]').forEach(area => {
+        const { width, height } = area.getBoundingClientRect();
+        if (width > 0 && height > 0) drawingSizes[area.dataset.answerArea!] = [width, height];
+      });
+      const receipt = await submitStudentAssignment(token, studentCode, submissionId, ink.drawing, files, drawingSizes);
       setSubmittedAt(receipt.submitted_at); window.scrollTo(0, 0);
     } catch (reason) { toast.error(reason instanceof Error ? reason.message : 'Your work could not be submitted. Please try again.'); }
     finally { setSubmitting(false); }

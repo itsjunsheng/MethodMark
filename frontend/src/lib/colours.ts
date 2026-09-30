@@ -7,6 +7,12 @@ export const colours = [
   { value: 'rose', label: 'Rose', accent: '#b7818e', soft: '#f9eef1' },
   { value: 'peach', label: 'Peach', accent: '#c69170', soft: '#fbf0e8' },
   { value: 'sand', label: 'Sand', accent: '#b49b62', soft: '#f7f3e7' },
+  { value: 'teal', label: 'Teal', accent: '#508d88', soft: '#eaf5f3' },
+  { value: 'mint', label: 'Mint', accent: '#76a18a', soft: '#edf7f0' },
+  { value: 'sky', label: 'Sky', accent: '#729fb9', soft: '#eef6fb' },
+  { value: 'indigo', label: 'Indigo', accent: '#767fad', soft: '#eff0f9' },
+  { value: 'plum', label: 'Plum', accent: '#a0799b', soft: '#f6edf5' },
+  { value: 'slate', label: 'Slate', accent: '#7b8793', soft: '#f0f3f5' },
 ] as const;
 export type ItemColour = typeof colours[number]['value'];
 

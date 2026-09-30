@@ -3,10 +3,8 @@ import type { BankQuestion } from './types/questionBank';
 
 export type Page = 'Overview' | 'Practice papers' | 'Assignments' | 'Marking queue' | 'Classes & students' | 'Insights' | 'Settings';
 export type Question = { id: string; topic: string; text: string; solution: string; method: number; accuracy: number; bankQuestion?: BankQuestion; content?: BankQuestion['question_content']; marksByPart?: Record<string, number> };
-export type Paper = { id: string; color?: ItemColour; title: string; level: string; subject: string; topics: string[]; difficulty: string; duration: number; questions: Question[]; approved: boolean; status?: 'draft' | 'reviewed' | 'published' | 'archived'; instructions?: string };
+export type Paper = { id: string; color?: ItemColour; is_archived?: boolean; title: string; level: string; subject: string; topics: string[]; difficulty: string; duration: number; questions: Question[]; approved: boolean; status?: 'draft' | 'reviewed' | 'published'; instructions?: string };
 export type Assignment = { id: string; paperId: string; title: string; className: string; due: string; submitted: number; total: number; status: 'Active' | 'Released' | 'Draft'; review: number; paperSnapshot?: Paper };
-export type Mark = { method: number; accuracy: number; feedback: string; checked: boolean };
-export type Review = { id: string; name: string; code: string; assignmentId: string; flagged: boolean; approved: boolean; marks: Mark[] };
 export const classes = ['Sec 3 · E-Math', 'Sec 4 · E-Math', 'Sec 3 · A-Math', 'Sec 4 · A-Math'];
 export const topics = ['Quadratic equations', 'Algebraic expressions', 'Trigonometry', 'Coordinate geometry', 'Statistics', 'Differentiation'];
 export const questionBank: Record<string, Omit<Question, 'id'>[]> = {
@@ -58,9 +56,5 @@ export const initialAssignments: Assignment[] = [
 const names = ['Chloe Tan', 'Ethan Lim', 'Aisha Rahman', 'Ryan Lee', 'Isabelle Ng', 'Lucas Wong', 'Sofia Ahmad', 'Daniel Koh', 'Olivia Chen', 'Arjun Nair', 'Emma Goh', 'Zachary Teo'];
 const otherNames = ['Amelia', 'Benjamin', 'Charlotte', 'Dylan', 'Emily', 'Felix', 'Grace', 'Hannah', 'Isaac', 'Jasmine', 'Kai', 'Leah'];
 export const students = classes.flatMap((className, c) => names.map((name, i) => ({ id: `S${301 + c * 12 + i}`, name: c === 0 ? name : `${otherNames[(i + c * 3) % 12]} ${name.split(' ').slice(1).join(' ')}`, className, score: 55 + ((i * 7 + c * 11) % 40), change: 2 + i % 9, gap: topics[(i + c) % topics.length] })));
-export const initialReviews: Review[] = initialAssignments.flatMap((a, n) => Array.from({ length: a.review }, (_, i) => {
-  const student = students.filter(s => s.className === a.className)[i];
-  return { id: `r${n}-${i}`, name: student.name, code: student.id, assignmentId: a.id, flagged: i === 0, approved: false, marks: initialPapers[n].questions.map((_, q) => ({ method: 2, accuracy: i === 0 && q === 0 ? 0 : 1, feedback: i === 0 && q === 0 ? 'Your method is correct. Check the final arithmetic and the signs in your answer.' : 'Clear working and a correct answer. Keep showing each step of your method.', checked: false })) };
-}));
 export const initials = (name: string) => name.split(' ').map(x => x[0]).slice(0, 2).join('');
 export const dateLabel = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString('en-SG', { day: 'numeric', month: 'short' });

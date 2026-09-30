@@ -17,6 +17,7 @@ export function testSession(user = testUser) {
 export async function mockAuth(page: Page, signedIn = false) {
   const session = testSession();
   await mockAssignments(page);
+  await page.route('**/api/v1/grading', route => route.fulfill({ json: [] }));
   await page.route('**/rest/v1/classes*', route => route.fulfill({ json: [] }));
   await page.route('**/auth/v1/**', route => {
     const path = new URL(route.request().url()).pathname;

@@ -141,7 +141,7 @@ class AssignmentStore:
             except HTTPException:
                 pass  # Keep the original error; unreferenced files stay private.
 
-    async def submit(self, token, code, submission_id, drawing, files):
+    async def submit(self, token, code, submission_id, drawing, files, drawing_sizes=None):
         assignment = await self.assignment(token)
         member = await self.member(assignment, code)
         existing = await self.receipt(assignment["id"], member["id"])
@@ -152,6 +152,8 @@ class AssignmentStore:
         if is_due(assignment["due_at"]):
             raise HTTPException(409, "The submission deadline has passed.")
         validate_drawing(drawing, assignment["papers"]["questions_snapshot"])
+        drawing_sizes = drawing_sizes if drawing_sizes is not None else {}
+        validate_drawing_sizes(drawing_sizes, assignment["papers"]["questions_snapshot"])
         if not any(drawing.values()) and not files:
             raise HTTPException(422, "Add handwriting or photos before submitting.")
         attachments = await self.upload(assignment, member, submission_id, files)
@@ -164,6 +166,7 @@ class AssignmentStore:
                     "p_code": code,
                     "p_id": str(submission_id),
                     "p_drawing": drawing,
+                    "p_drawing_sizes": drawing_sizes,
                     "p_attachments": attachments,
                 },
             )
@@ -282,3 +285,17 @@ def validate_drawing(drawing, questions):
                     or any(type(n) not in (int, float) or not 0 <= n <= 1 for n in point)
                 ):
                     raise HTTPException(422, "Invalid handwriting coordinates.")
+
+
+def validate_drawing_sizes(sizes, questions):
+    if not isinstance(sizes, dict) or len(sizes) > 500:
+        raise HTTPException(422, "Invalid answer space dimensions.")
+    validate_drawing({key: [] for key in sizes}, questions)
+    for size in sizes.values():
+        if (
+            not isinstance(size, list)
+            or len(size) != 2
+            or any(type(n) not in (int, float) or not 1 <= n <= 10000 for n in size)
+            or not 0.02 <= size[1] / size[0] <= 5
+        ):
+            raise HTTPException(422, "Invalid answer space dimensions.")

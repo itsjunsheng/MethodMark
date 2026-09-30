@@ -88,6 +88,9 @@ test('student submission updates counts, missing list and tutor work preview', a
   await expect(page.getByRole('heading', { name: 'Your work has been submitted.' })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   expect(db.submissions).toHaveLength(1);
+  const areas = Object.values(db.submissions[0].drawing_sizes ?? {});
+  expect(areas.length).toBeGreaterThan(0);
+  expect(areas.every(([width, height]) => width > 0 && height > 0)).toBe(true);
   expect(Object.keys(db.submissions[0].drawing)).toHaveLength(1);
   await expect(page.getByRole('button', { name: 'View paper' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Published practice paper' })).toHaveCount(0);

@@ -12,14 +12,14 @@ function check(error: { code?: string; message: string } | null) {
   if (error.code === '22023') throw new Error(error.message);
   throw new Error('Could not save or load your papers and assignments. Please try again.');
 }
-type PaperRow = {
-  color: ItemColour;
+export type PaperRow = {
+  color: ItemColour; is_archived: boolean;
   id: string; title: string; subject: string; school_year: number; subject_level: string;
   duration_minutes: number; instructions: string; status: NonNullable<Paper['status']>;
   questions_snapshot: Paper['questions']; updated_at: string;
 };
-function toPaper(row: PaperRow): Paper {
-  return { id: row.id, color: row.color, title: row.title, subject: row.subject,
+export function toPaper(row: PaperRow): Paper {
+  return { id: row.id, color: row.color, is_archived: row.is_archived, title: row.title, subject: row.subject,
     level: 'Secondary ' + row.school_year + ' (' + row.subject_level + ')',
     duration: row.duration_minutes, instructions: row.instructions, status: row.status,
     approved: row.status === 'reviewed' || row.status === 'published',
@@ -29,7 +29,7 @@ function toPaper(row: PaperRow): Paper {
 }
 export async function listPapers(signal: AbortSignal): Promise<Paper[]> {
   const { data, error } = await client().from('papers').select('*')
-    .eq('is_deleted', false).neq('status', 'archived').order('created_at', { ascending: false }).abortSignal(signal);
+    .order('created_at', { ascending: false }).abortSignal(signal);
   check(error);
   return (data ?? []).map(row => toPaper(row as PaperRow));
 }
@@ -104,9 +104,16 @@ export async function updatePaperColour(id: string, color: ItemColour): Promise<
 }
 
 export async function deletePaper(id: string): Promise<void> {
-  // Retain snapshots used by published assignments and student submissions.
-  const { data, error } = await client().from('papers').update({ is_deleted: true })
+  // Foreign keys remove dependent assignments and submissions.
+  const { data, error } = await client().from('papers').delete()
     .eq('id', id).select('id').single();
   check(error);
   if (!data) throw new Error('This paper is unavailable. Please refresh your library.');
+}
+
+export async function setPaperArchived(id: string, is_archived: boolean): Promise<Paper> {
+  const { data, error } = await client().from('papers').update({ is_archived }).eq('id', id).select('*').single();
+  check(error);
+  if (!data) throw new Error('This paper is unavailable. Please refresh your library.');
+  return toPaper(data as PaperRow);
 }

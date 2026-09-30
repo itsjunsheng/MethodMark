@@ -20,11 +20,12 @@ function checkError(error: { code?: string; message: string } | null) {
 }
 
 const studentFields = 'id,class_id,student_code,name,is_active';
-const classFields = 'id,name,color,subject,school_year,subject_level,students(count)';
+const classFields = 'id,name,color,is_archived,subject,school_year,subject_level,students(count)';
 
-export async function listClasses(signal: AbortSignal): Promise<TutorClass[]> {
-  const { data, error } = await client().from('classes').select(classFields).eq('students.is_active', true)
-    .eq('is_archived', false).order('created_at', { ascending: false }).abortSignal(signal);
+export async function listClasses(signal: AbortSignal, archived: boolean | null = false): Promise<TutorClass[]> {
+  let query = client().from('classes').select(classFields).eq('students.is_active', true);
+  if (archived !== null) query = query.eq('is_archived', archived);
+  const { data, error } = await query.order('created_at', { ascending: false }).abortSignal(signal);
   checkError(error);
   return data ?? [];
 }
@@ -80,12 +81,21 @@ export async function removeClassStudent(classId: string, studentId: string) {
 
 export async function deleteClass(classId: string) {
   // The database removes this class, its students and assignments; papers remain.
-  const { error } = await client().from('classes').delete().eq('id', classId);
+  const { data, error } = await client().from('classes').delete().eq('id', classId).select('id').single();
   checkError(error);
+  if (!data) throw new Error('This class is unavailable. Please refresh the page.');
 }
 
 export async function updateClassColour(id: string, color: ItemColour): Promise<TutorClass> {
   const { data, error } = await client().from('classes').update({ color }).eq('id', id)
+    .select(classFields).eq('students.is_active', true).single();
+  checkError(error);
+  if (!data) throw new Error('This class is unavailable. Please refresh the page.');
+  return data;
+}
+
+export async function setClassArchived(id: string, is_archived: boolean): Promise<TutorClass> {
+  const { data, error } = await client().from('classes').update({ is_archived }).eq('id', id)
     .select(classFields).eq('students.is_active', true).single();
   checkError(error);
   if (!data) throw new Error('This class is unavailable. Please refresh the page.');

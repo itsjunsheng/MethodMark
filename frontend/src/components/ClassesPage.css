@@ -20,8 +20,6 @@
 .class-roster-heading { flex-wrap: wrap; }
 .class-roster-heading h2 { font-size: 24px; }
 .class-roster-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; max-width: 100%; }
-.classes-page .class-delete { color: #985b4d; }
-.classes-page .class-delete:hover { background: #fcf2ef; border-color: #dfbfb6; }
 .class-roster { overflow: hidden; }
 .roster-toolbar { display: flex; gap: 18px; align-items: center; justify-content: space-between; padding: 25px 28px; }
 .roster-toolbar h3 { font-size: 16px; }

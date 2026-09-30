@@ -25,11 +25,12 @@ export async function openStudentAssignment(token: string, code: string): Promis
     })),
   } };
 }
-export function submitStudentAssignment(token: string, code: string, id: string, drawing: InkDrawing, files: File[]) {
+export function submitStudentAssignment(token: string, code: string, id: string, drawing: InkDrawing, files: File[], drawingSizes: Record<string, [number, number]> = {}) {
   const form = new FormData();
   form.set('student_code', code);
   form.set('submission_id', id);
   form.set('drawing', JSON.stringify(drawing));
+  form.set('drawing_sizes', JSON.stringify(drawingSizes));
   files.forEach(file => form.append('files', file));
   return request<{ id: string; submitted_at: string }>(token, '/submit', { method: 'POST', body: form });
 }

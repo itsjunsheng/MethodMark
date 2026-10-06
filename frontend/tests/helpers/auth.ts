@@ -1,4 +1,5 @@
 import { mockAssignments } from './assignments';
+import { emptyInsights } from './insights';
 import type { Page } from '@playwright/test';
 
 export const testUser = {
@@ -18,6 +19,7 @@ export async function mockAuth(page: Page, signedIn = false) {
   const session = testSession();
   await mockAssignments(page);
   await page.route('**/api/v1/grading', route => route.fulfill({ json: [] }));
+  await page.route('**/api/v1/insights**', route => route.fulfill({ json: emptyInsights }));
   await page.route('**/rest/v1/classes*', route => route.fulfill({ json: [] }));
   await page.route('**/auth/v1/**', route => {
     const path = new URL(route.request().url()).pathname;

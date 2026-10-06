@@ -27,6 +27,7 @@ If uv is unavailable, create a virtual environment and use `python -m pip instal
 | `POST /api/v1/student/assignments/{token}/open` | Validate class code; return questions without answer keys |
 | `POST /api/v1/student/assignments/{token}/submit` | Store handwriting/photos; return a receipt |
 | `GET /api/v1/submissions/{id}/attachments` | Verified owning tutor only; short-lived photo URLs |
+| `GET /api/v1/insights?class_id=&days=` | Verified tutor only; analytics from tutor-checked review parts |
 | `/api/docs` | Interactive Swagger UI |
 | `/api/redoc` | Alternative API documentation |
 | `/api/openapi.json` | OpenAPI contract |

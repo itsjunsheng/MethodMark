@@ -43,7 +43,7 @@ test('copy feedback does not shift the roster and pauses on hover or keyboard fo
   }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Classes & students', exact: true }).click();
-  await page.getByRole('button', { name: /Morning maths/ }).click();
+  await page.getByRole('button', { name: 'Open class Morning maths' }).click();
   const search = page.getByRole('textbox', { name: 'Search students' });
   const before = await search.boundingBox();
   await page.clock.install();

@@ -52,7 +52,7 @@ async function mockGrading(page: Page) {
 }
 async function openQueue(page: Page) {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Good morning, Jun.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Jun\./ })).toBeVisible();
   if (await page.getByRole('button', { name: 'Open navigation', exact: true }).isVisible())
     await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await page.locator('.sidebar').getByRole('button', { name: 'Marking queue', exact: true }).click();

@@ -27,22 +27,23 @@ See [frontend setup](frontend/README.md) for build and browser-check commands.
 
 ## Explore the prototype
 
-- **Overview:** assignment and review counts, sample class performance, recent assignments, and activity.
+- **Overview:** assignment, student and review counts, the class average and score trend from checked work, recent assignments, and activity.
 - **Practice papers:** search your saved library; create a paper from the question bank; edit questions and worked solutions; inspect method and accuracy rubrics; approve before publishing.
 - **Assignments:** class/status/search filters, submission progress, shared student links, and assignment details. Published assignments retain a snapshot of their paper and rubric.
 - **Marking queue:** real submissions with processing states, rubric-based AI proposals, confidence flags, original handwriting/photos, and private tutor review drafts. Result release is outside this phase.
 - **Classes & students:** create real classes in Supabase; add students in batches with colour-animal codes; save optional names; create separate student records for each class; search and copy codes.
-- **Insights:** class and time filters, topic confidence, common mistakes, and CSV export of sample historical performance.
-- **Settings:** browser-local profile preferences and account logout.
+- **Insights:** class and period filters; average, method and answer marks; score trend and spread; topic mastery; common mistakes; submission status; per-student learning gaps; and CSV export. Only parts the tutor has checked in a review are counted.
+- **Settings:** display name saved to the tutor's account, password change, teaching preferences and logout.
+- **Notifications:** the bell lists work ready for review, flagged or failed grading, submissions in progress and assignments past their deadline.
 - **Student assignments:** account-free class-code entry, handwriting on the paper, print/save PDF, and real submission of ink or photos.
 
 ## Current scope
 
-The React frontend uses FastAPI to read Supabase questions when a tutor selects **Generate sample paper**. The frontend selects questions by subject, school year, subject level, topics, difficulty and optional count, preserving parts, diagrams, solutions and rubrics. See [frontend setup](frontend/README.md) and [backend setup](backend/README.md) to run both services. Tutor authentication uses Supabase Auth; AI generation is not connected, and question-bank access is currently limited to local development. Handwriting and photos are processed by a separate configurable grading worker; see [grading setup](backend/app/grading/README.md). Historical charts, performance averages, topic confidence, use sample data; they are not calculated by an analytics service.
+The React frontend uses FastAPI to read Supabase questions when a tutor selects **Generate sample paper**. The frontend selects questions by subject, school year, subject level, topics, difficulty and optional count, preserving parts, diagrams, solutions and rubrics. See [frontend setup](frontend/README.md) and [backend setup](backend/README.md) to run both services. Tutor authentication uses Supabase Auth; AI generation is not connected, and question-bank access is currently limited to local development. Handwriting and photos are processed by a separate configurable grading worker; see [grading setup](backend/app/grading/README.md). Insights are calculated by `GET /api/v1/insights` from review drafts: a part counts once the tutor ticks **I have checked this part**, so AI proposals alone never appear in analytics.
 
 Papers, class assignments and student submissions persist in Supabase. Published papers are immutable. Each assigned class has its own shared link and deadline. Assignments show actual submission counts and students who have not submitted; they become **Ready for grading** at the deadline. Grading jobs and tutor review drafts persist in Supabase. Profile preferences use namespaced local storage.
 
-The sample workspace date is 10 September 2026. Fonts load from Google Fonts, with system fallbacks when unavailable. The backend calls Supabase to read the question bank.
+Fonts load from Google Fonts, with system fallbacks when unavailable. The backend calls Supabase to read the question bank.
 
 ## Browser checks
 
@@ -57,7 +58,8 @@ Playwright checks navigation, draft generation and publishing, grading reviews, 
 ## Files
 
 - `frontend/src/App.tsx`: screens, shared controls, paper and review workflows.
-- `frontend/src/data.ts`: typed sample papers, rubrics, classes, students, and submissions.
+- `frontend/src/data.ts`: shared paper and question types.
+- `frontend/src/components/Insights.tsx`: analytics page and charts; `backend/app/services/insights.py` computes them.
 - `frontend/src/styles.css`: responsive layout and component styles.
 - `frontend/src/refinements.css`: shared reading-size and contrast adjustments.
 - `frontend/tests/workspace.spec.ts`: end-to-end browser checks.

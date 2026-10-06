@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, Check, ChevronDown, FileText, Link2, ShieldCheck } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUpRight, Check, ChevronDown, FileText, Link2, LockKeyhole, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { Brand } from './Brand';
 import './PublicPages.css';
 
@@ -10,9 +10,43 @@ const steps = [
 const questions = [
   ['Who is MethodMark for?', 'MethodMark is built for secondary mathematics tutors in Singapore, with Mathematics and Additional Mathematics practice organised by school year, subject level and topic.'],
   ['Do my students need an account?', 'No. Students open the practice-paper link shared by their tutor and use their student code. Tutor accounts are the only accounts needed.'],
-  ['Does AI decide the final mark?', 'You always have the final say. The planned AI marking workflow proposes method and accuracy marks, flags uncertain working, and requires your review before any result is released. AI marking is still in development.'],
-  ['What can I try today?', 'Create a tutor account to build papers from the connected question bank and preview writing directly on a paper. Paper sharing, submissions and analytics currently use browser-local sample data.'],
+  ['Does AI decide the final mark?', 'No. MethodMark reads the handwritten working, proposes method and accuracy marks against your rubric, and flags anything it is unsure about. You check and adjust every mark, and it stays private while you review it.'],
+  ['Is my students’ work private?', 'Submitted work is stored privately and only the tutor who set the paper can see it. Students see the questions, never the worked solutions or marking rubric. To propose marks, the question and the student’s working are sent to the AI provider with storage turned off.'],
+  ['What can I try today?', 'Create a tutor account, set up a class and build a practice paper from the question bank. Share the link, let students write on the paper or upload photos of their working, and review the proposed marks in your marking queue.'],
 ];
+const rubric = [
+  { code: 'M1', criterion: 'Factorises the quadratic correctly', awarded: true },
+  { code: 'M1', criterion: 'Sets each factor equal to zero', awarded: true },
+  { code: 'A1', criterion: 'Both roots correct', awarded: false },
+];
+
+function ReviewPreview() {
+  return <figure className="landing-review">
+    <div className="landing-review-card">
+      <div className="landing-review-head"><span>Question 2 &middot; Quadratic equations</span><strong>2 / 3</strong></div>
+      <div className="landing-review-body">
+        <div className="landing-review-work">
+          <span className="landing-review-label">Student working</span>
+          <p className="landing-review-question">Solve 2x<sup>2</sup> + 7x + 3 = 0.</p>
+          <div className="landing-review-ink" role="img" aria-label="Handwritten working: (2x + 1)(x + 3) = 0, so x = one half or x = minus 3">
+            <p aria-hidden="true">(2x + 1)(x + 3) = 0</p>
+            <p aria-hidden="true"><mark>x = ½</mark> or x = −3</p>
+          </div>
+        </div>
+        <div>
+          <span className="landing-review-label">Rubric</span>
+          <ul className="landing-review-points">{rubric.map(point => <li key={point.criterion} className={point.awarded ? 'is-awarded' : 'is-missed'}>
+            <b>{point.code}</b><span>{point.criterion}</span>
+            <em>{point.awarded ? <Check size={13} aria-hidden="true" /> : <X size={13} aria-hidden="true" />}{point.awarded ? '1/1' : '0/1'}</em>
+          </li>)}</ul>
+        </div>
+      </div>
+      <div className="landing-review-note"><Sparkles size={16} aria-hidden="true" /><p><strong>AI proposal.</strong> Correct method. The sign slips when solving 2x + 1 = 0.</p></div>
+      <div className="landing-review-foot"><span><Check size={14} aria-hidden="true" />Checked by you</span><span>Private while you review</span></div>
+    </div>
+    <figcaption>Method marks are kept, even when the final answer slips.</figcaption>
+  </figure>;
+}
 
 function PaperIllustration() {
   return <div className="landing-illustration" aria-label="Illustration of a mathematics paper with method and accuracy marks">
@@ -40,9 +74,9 @@ export function LandingPage() {
         <div className="landing-hero-copy"><p className="public-eyebrow"><span />MADE FOR MATHEMATICS TUTORS</p><h1>Less marking.<br />More <em>teaching.</em></h1><p className="landing-intro">From the first question to the final method mark.<br className="landing-desktop-break" /> A considered way to create meaningful practice,<br className="landing-desktop-break" /> clearer feedback, and your next lightbulb moment.</p><div className="landing-hero-actions"><a className="public-button" href="/?view=signup">Create your tutor account<ArrowRight size={17} /></a><a className="public-text-link" href="#how-it-works">Take a closer look<ArrowDown size={16} /></a></div><p className="landing-reassurance"><ShieldCheck size={15} />Your expertise. Always at the heart of it.</p></div>
         <PaperIllustration />
       </section>
-      <div className="landing-principles public-container"><span>THOUGHTFUL BY DESIGN</span><p><BookOpen size={17} />Secondary mathematics</p><p><Check size={17} />Method marks matter</p><p><Link2 size={17} />No student accounts</p></div>
+      <div className="landing-principles public-container"><span>THOUGHTFUL BY DESIGN</span><p><Check size={17} />Method marks, not just answers</p><p><ShieldCheck size={17} />You check every mark</p><p><LockKeyhole size={17} />Student work stays private</p><p><Link2 size={17} />No student accounts</p></div>
       <section id="how-it-works" className="landing-workflow public-container"><div className="landing-section-heading"><p className="public-eyebrow">A LITTLE LESS ADMIN</p><h2>From practice to progress.<br /><em>With you in control.</em></h2><p>One considered flow, built around the way you teach.</p></div><div className="landing-steps">{steps.map(({ number, icon: Icon, title, text }) => <article key={number}><div className="landing-step-top"><span>{number}</span><Icon size={22} strokeWidth={1.4} /></div><h3>{title}</h3><p>{text}</p></article>)}</div></section>
-      <section className="landing-belief"><div className="public-container landing-belief-inner"><div><p className="public-eyebrow">BEYOND THE FINAL ANSWER</p><h2>See the thinking.<br /><em>Support the learner.</em></h2></div><div><p>A correct method deserves recognition, even when the final answer misses the mark. MethodMark puts the working, the rubric and your judgement together.</p><div className="landing-belief-rule"><ShieldCheck size={21} /><span>AI can assist. Only you approve.</span></div><small>AI marking and progress analytics are being developed with tutor review at their core.</small></div></div></section>
+      <section className="landing-belief"><div className="public-container landing-belief-inner"><div><p className="public-eyebrow">BEYOND THE FINAL ANSWER</p><h2>See the thinking.<br /><em>Support the learner.</em></h2><p>A correct method deserves recognition, even when the final answer misses the mark. MethodMark reads each step against your rubric, proposes method and accuracy marks, and points out where the working went wrong.</p><div className="landing-belief-rule"><ShieldCheck size={21} /><span>AI can assist. Only you approve.</span></div></div><ReviewPreview /></div></section>
       <section id="questions" className="landing-faq public-container"><div><p className="public-eyebrow">A FEW THINGS TO KNOW</p><h2>Good questions.<br /><em>Clear answers.</em></h2></div><div className="landing-faq-list">{questions.map(([question, answer]) => <details key={question}><summary>{question}<ChevronDown size={18} /></summary><p>{answer}</p></details>)}</div></section>
       <section className="landing-final public-container"><span className="public-eyebrow">MAKE ROOM FOR THE MOMENTS THAT MATTER</span><h2>Your next great lesson<br />starts with <em>a little space.</em></h2><a className="public-button" href="/?view=signup">Get started with MethodMark<ArrowRight size={17} /></a><p>Already have an account? <a href="/?view=login">Log in</a></p></section>
     </main>

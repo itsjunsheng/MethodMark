@@ -19,7 +19,7 @@ uv sync --locked
 uv run python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Set `METHODMARK_SUPABASE_URL` and `METHODMARK_SUPABASE_SECRET_KEY` in `backend/.env` first. The sample-paper flow sends the signed-in tutor access token to the backend API. Keep the secret key in the backend only. The backend verifies the Supabase Auth user. This all-status sample endpoint remains available only with `METHODMARK_ENVIRONMENT=development`. Classes, saved papers, assignments and submissions use real Supabase data; analytics and AI-marking screens remain demos.
+Set `METHODMARK_SUPABASE_URL` and `METHODMARK_SUPABASE_SECRET_KEY` in `backend/.env` first. The sample-paper flow sends the signed-in tutor access token to the backend API. Keep the secret key in the backend only. The backend verifies the Supabase Auth user. This all-status sample endpoint remains available only with `METHODMARK_ENVIRONMENT=development`. Classes, saved papers, assignments, submissions, AI marking and insights use real data.
 
 Vite forwards `/api/*` requests to http://127.0.0.1:8000. To override the development target, copy `.env.example` to `.env` and set `API_PROXY_TARGET`. Keep browser calls relative, such as `fetch('/api/v1/health')`. Do not put secrets in `VITE_*` variables; those are included in client bundles.
 
@@ -89,7 +89,7 @@ Generated papers and edited snapshots are saved in Supabase `papers`. Published 
 
 The Practice papers tab shows the tutor's saved papers. Use **Create practice paper** to select questions from the question bank and save a new draft.
 
-Profile preferences and demo review drafts still use user-scoped local storage. Old local paper/assignment previews are no longer read; they are not imported into another tutor's account. Historical analytics and the marking queue remain illustrative.
+The display name is saved to the Supabase Auth account. Notification read state is stored per tutor in local storage. Old local paper/assignment previews are no longer read; they are not imported into another tutor's account.
 
 Fonts load from Google Fonts with system fallbacks. Question fetching, paper mapping and structured rendering live in `src/api/questions.ts`, `src/lib/paperQuestions.ts` and `src/components/QuestionContent.tsx`. Browser regression tests mock the backend using fixtures matching the first five questions in `supabase/seed_questions.sql`.
 

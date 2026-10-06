@@ -3,7 +3,15 @@
 import json
 
 from app.grading.evidence import ink_content
-from app.grading.schemas import Assessment, GradingError, ReviewDraft, Transcription
+from app.grading.schemas import (
+    Assessment,
+    Decision,
+    GradingError,
+    PartAssessment,
+    Reading,
+    ReviewDraft,
+    Transcription,
+)
 from app.schemas.question import BankQuestion
 from app.services.assignments import validate_drawing, validate_drawing_sizes
 
@@ -128,6 +136,82 @@ def validate_review(draft: ReviewDraft, paper: dict):
                     )
 
 
+def grouped(items, key):
+    groups = {}
+    for item in items:
+        groups.setdefault(getattr(item, key), []).append(item)
+    return groups
+
+
+def complete_reading(reading, part_ids, inked, photos):
+    # A part the model omits or repeats must not fail every other part of the submission.
+    found, parts = grouped(reading.parts, "part_id"), []
+    for part_id in part_ids:
+        matches = found.get(part_id, [])
+        if len(matches) == 1:
+            parts.append(matches[0])
+        elif matches or part_id in inked or photos:
+            concern = (
+                "The AI returned conflicting readings for this part."
+                if matches
+                else "The AI did not return a reading for this part."
+            )
+            parts.append(
+                Reading(
+                    part_id=part_id,
+                    text="",
+                    legibility="unreadable",
+                    confidence=0,
+                    concerns=[concern],
+                )
+            )
+        else:
+            # No answer space was used and no photo was uploaded, so the part is blank.
+            parts.append(
+                Reading(part_id=part_id, text="", legibility="blank", confidence=1, concerns=[])
+            )
+    return Transcription(parts=parts)
+
+
+def complete_assessment(assessed, rubric_parts):
+    # Unmatched IDs leave points unassessed for the tutor; no mark is ever invented.
+    found, parts = grouped(assessed.parts, "part_id"), {}
+    for rubric in rubric_parts:
+        ids = [point.id for point in rubric.marking_points]
+        matches = found.get(rubric.part_id, [])
+        part = matches[0] if len(matches) == 1 else None
+        points = grouped(part.points, "point_id") if part else {}
+        if part and (set(points) - set(ids) or any(len(p) > 1 for p in points.values())):
+            concern = "The AI's marking did not match the rubric for this part."
+            part, points = part.model_copy(update={"concerns": [*part.concerns, concern]}), {}
+        elif not part:
+            concern = (
+                "The AI returned conflicting assessments for this part."
+                if matches
+                else "The AI did not assess this part."
+            )
+            part = PartAssessment(
+                part_id=rubric.part_id, points=[], feedback="", concerns=[concern]
+            )
+        parts[rubric.part_id] = part.model_copy(
+            update={
+                "points": [
+                    points[point_id][0]
+                    if point_id in points
+                    else Decision(
+                        point_id=point_id,
+                        awarded=None,
+                        evidence="",
+                        rationale="The AI did not return a usable decision for this point.",
+                        confidence=0,
+                    )
+                    for point_id in ids
+                ]
+            }
+        )
+    return parts
+
+
 async def grade(paper, submission, photos, provider, heartbeat):
     pairs = paper_questions(paper)
     validate_drawing(submission["drawing"], paper["questions_snapshot"])
@@ -145,7 +229,7 @@ async def grade(paper, submission, photos, provider, heartbeat):
                 ),
             }
         ]
-        images = []
+        images, inked = [], set()
         for part in bank.marking_rubric.parts:
             ink = ink_content(
                 submission["drawing"],
@@ -155,6 +239,7 @@ async def grade(paper, submission, photos, provider, heartbeat):
                 sizes,
             )
             if ink:
+                inked.add(part.part_id)
                 images.extend(
                     [{"type": "text", "text": "Digital answer space for part " + part.part_id}, ink]
                 )
@@ -179,10 +264,14 @@ async def grade(paper, submission, photos, provider, heartbeat):
                 for point in part["points"]:
                     point.update(awarded=0, confidence=1, rationale="No submitted work.")
             continue
-        reading = await provider.complete(
-            provider.settings.grading_vision_model, READ_PROMPT, content + images, Transcription
+        reading = complete_reading(
+            await provider.complete(
+                provider.settings.grading_vision_model, READ_PROMPT, content + images, Transcription
+            ),
+            [part.id for part in bank.question_content.parts],
+            inked,
+            bool(photos),
         )
-        exact(reading.parts, "part_id", [part.id for part in bank.question_content.parts])
         await heartbeat()
         assessed = await provider.complete(
             provider.settings.grading_model,
@@ -203,13 +292,12 @@ async def grade(paper, submission, photos, provider, heartbeat):
             ],
             Assessment,
         )
-        exact(assessed.parts, "part_id", [part.part_id for part in bank.marking_rubric.parts])
+        decisions = complete_assessment(assessed, bank.marking_rubric.parts)
         for target, rubric in zip(
             result["questions"][index]["parts"], bank.marking_rubric.parts, strict=True
         ):
             source = next(p for p in reading.parts if p.part_id == rubric.part_id)
-            assessment = next(p for p in assessed.parts if p.part_id == rubric.part_id)
-            exact(assessment.points, "point_id", [point.id for point in rubric.marking_points])
+            assessment = decisions[rubric.part_id]
             flags = source.concerns + assessment.concerns
             if (
                 source.legibility in ("uncertain", "unreadable")

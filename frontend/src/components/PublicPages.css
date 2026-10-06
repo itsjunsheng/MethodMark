@@ -61,8 +61,8 @@
 .landing-section-heading { text-align: center; }
 .landing-page .landing-section-heading h2, .landing-belief h2, .landing-faq h2, .landing-final h2 { font-size: 44px; line-height: 1.16; letter-spacing: -1.4px; margin-top: 20px; }
 .landing-section-heading > p:last-child { margin-top: 20px; font-size: 16px; color: #6a7266; }
-.landing-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 58px; }
-.landing-steps article { padding: 0 35px; border-left: 1px solid #dfe2d7; }
+.landing-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 58px; }
+.landing-steps article { padding: 0 28px; border-left: 1px solid #dfe2d7; }
 .landing-steps article:first-child { border: 0; padding-left: 0; }
 .landing-steps article:last-child { padding-right: 0; }
 .landing-step-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 26px; color: #859478; }
@@ -154,6 +154,9 @@
   .landing-hero h1 { font-size: 62px; }
   .landing-desktop-break { display: none; }
   .landing-belief-inner, .landing-faq { gap: 50px; }
+  .landing-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 44px; }
+  .landing-steps article:nth-child(odd) { border: 0; padding-left: 0; }
+  .landing-steps article:nth-child(even) { padding-right: 0; }
 }
 @media (max-width: 900px) {
   .public-container { width: calc(100% - 40px); }
@@ -220,7 +223,7 @@
   .landing-page .landing-section-heading h2, .landing-final h2 { font-size: 35px; }
   .landing-section-heading > p:last-child { font-size: 15px; }
   .landing-steps { grid-template-columns: 1fr; margin-top: 35px; gap: 27px; }
-  .landing-steps article, .landing-steps article:first-child, .landing-steps article:last-child { padding: 24px 0 0; border: 0; border-top: 1px solid #dfe2d7; }
+  .landing-steps article, .landing-steps article:nth-child(n) { padding: 24px 0 0; border: 0; border-top: 1px solid #dfe2d7; }
   .landing-step-top { margin-bottom: 16px; }
   .landing-steps h3 { font-size: 17px; }
   .landing-steps article > p { font-size: 15px; }

@@ -1,11 +1,12 @@
-import { ArrowDown, ArrowRight, ArrowUpRight, Check, ChevronDown, FileText, Link2, LockKeyhole, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUpRight, ChartNoAxesCombined, Check, ChevronDown, FileText, Link2, LockKeyhole, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { Brand } from './Brand';
 import './PublicPages.css';
 
 const steps = [
   { number: '01', icon: FileText, title: 'Make practice purposeful.', text: 'Choose your topics, level and difficulty. Build a paper with worked solutions and a clear marking rubric.' },
   { number: '02', icon: Link2, title: 'Keep it simple for students.', text: 'Share a paper link. Students can write directly on the page or attach handwritten working, without an account.' },
-  { number: '03', icon: ShieldCheck, title: 'Give every step its due.', text: 'Review the working, method marks and feedback. You decide what is approved and when results are released.' },
+  { number: '03', icon: ShieldCheck, title: 'Give every step its due.', text: 'Review the working, method marks and feedback. Every mark stays a proposal until you check it.' },
+  { number: '04', icon: ChartNoAxesCombined, title: 'See where the class is stuck.', text: 'Checked marks build into topic mastery, common mistakes and each student’s gaps, so the next lesson starts in the right place.' },
 ];
 const questions = [
   ['Who is MethodMark for?', 'MethodMark is built for secondary mathematics tutors in Singapore, with Mathematics and Additional Mathematics practice organised by school year, subject level and topic.'],

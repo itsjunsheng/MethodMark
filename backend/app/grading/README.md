@@ -44,6 +44,9 @@ and save tutor review drafts. Result approval, release and student results are n
    use **Processing** to see queued/in-progress work. Completed assessments appear under
    **Awaiting review**; inspect original work, transcription, rubric points and feedback.
    Edit marks or feedback and **Save review draft**. Students cannot see these drafts.
+   Once every part is ticked **I have checked this part**, the submission moves to **Reviewed**;
+   a partly checked draft shows **Review in progress** and stays under **Awaiting review**.
+   The queue's `review_complete` field carries this rule, which Insights also uses.
 
 The worker must remain running separately from Uvicorn. Without it, submissions stay queued.
 Restart it after changing provider settings. Missing keys stop the worker with a configuration

@@ -422,6 +422,38 @@ def test_store_scopes_reads_and_checks_optimistic_version_and_worker_lease():
     asyncio.run(run())
 
 
+def test_queue_says_whether_each_review_is_complete_without_sending_drafts():
+    def part(part_id, checked):
+        return {"part_id": part_id, "points": [], "feedback": "", "checked": checked}
+
+    def row(draft):
+        return {
+            "submission_id": SUBMISSION,
+            "status": "awaiting_review",
+            "review_saved_at": "2026-10-08T00:00:00Z" if draft else None,
+            "review_draft": draft,
+            "submissions": {
+                "student_code": "blue-otter",
+                "submitted_at": "2026-10-07T00:00:00Z",
+                "students": {"name": "Aisha"},
+                "assignments": {"classes": {"name": "Sec 3"}, "papers": {"title": "Algebra"}},
+            },
+        }
+
+    done = {"questions": [{"question_id": "q1", "parts": [part("a", True), part("b", True)]}]}
+    partial = {"questions": [{"question_id": "q1", "parts": [part("a", True), part("b", False)]}]}
+
+    async def run():
+        async with httpx.AsyncClient() as client:
+            db = GradingStore(settings(), client)
+            db.request = AsyncMock(return_value=[row(done), row(partial), row(None)])
+            rows = await db.queue("owner")
+            assert [item["review_complete"] for item in rows] == [True, False, False]
+            assert all("review_draft" not in item for item in rows)
+
+    asyncio.run(run())
+
+
 def test_worker_persists_provisional_results_or_safe_failure_and_never_releases():
     record = {"drawing": DRAWING, "attachments": [], "assignments": {"papers": paper()}}
     db = AsyncMock(submission=AsyncMock(return_value=record), photos=AsyncMock(return_value=[]))

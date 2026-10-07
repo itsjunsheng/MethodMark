@@ -136,6 +136,12 @@ def validate_review(draft: ReviewDraft, paper: dict):
                     )
 
 
+def review_complete(draft: dict | None) -> bool:
+    # Saved drafts cover every part (validate_review), so this matches Insights' "fully reviewed".
+    parts = [part for question in (draft or {}).get("questions", []) for part in question["parts"]]
+    return bool(parts) and all(part.get("checked") for part in parts)
+
+
 def grouped(items, key):
     groups = {}
     for item in items:

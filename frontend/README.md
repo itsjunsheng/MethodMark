@@ -156,4 +156,6 @@ Real submissions are loaded through authenticated `/api/v1/grading` endpoints. T
 refreshes every 15 seconds while visible. `MarkingQueue` handles filters and retries;
 `GradingReview` displays original work, transcription, rubric points, confidence and editable
 feedback. Saving creates a private review draft. There is no result release action yet.
+Work counts as awaiting review until every part is checked (`review_complete` from the API);
+`lib/reviewState.ts` holds that rule for the queue tabs, Overview counts and sidebar badge.
 See [grading setup](../backend/app/grading/README.md) for the SQL update and worker command.

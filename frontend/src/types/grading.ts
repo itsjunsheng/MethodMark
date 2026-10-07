@@ -6,6 +6,8 @@ export type QueueItem = {
   submission_id: string; status: GradingStatus; flagged: boolean; error: string | null;
   student_code: string; student_name: string | null; class_name: string; paper_title: string;
   submitted_at: string; review_saved_at: string | null; version: number; updated_at?: string;
+  // Every part of the saved review is ticked as checked (set by the server).
+  review_complete: boolean;
 };
 export type GradedPoint = { id: string; code: string; criterion: string; max_marks: number;
   awarded: number | null; evidence: string; rationale: string; confidence: number };

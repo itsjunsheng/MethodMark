@@ -2,6 +2,7 @@ import { MarkingQueue } from './components/MarkingQueue';
 import { SettingsPage } from './components/SettingsPage';
 import { NotificationsDialog } from './components/NotificationsDialog';
 import { buildNotices, useNotifications } from './lib/useNotifications';
+import { needsReview } from './lib/reviewState';
 import { useGradingQueue } from './lib/useGradingQueue';
 import { useToast } from './components/Toast';
 import { useEffect, useRef, useState } from 'react';
@@ -68,8 +69,7 @@ export default function App({ user, onLogout }: { user: User; onLogout: () => Pr
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [deletingPaper, setDeletingPaper] = useState<Paper | null>(null);
   const [publishPaper, setPublishPaper] = useState<Paper | null>(null);
-  // Work counts as pending until the tutor saves a review, matching the notification bell.
-  const pending = (gradingData.data ?? []).filter(item => item.status === 'awaiting_review' && !item.review_saved_at);
+  const pending = (gradingData.data ?? []).filter(needsReview);
   const notices = buildNotices(gradingData.data ?? [], assignmentData.data ?? []);
   const alerts = useNotifications(user.id, notices);
   const [noticeSince, setNoticeSince] = useState('');

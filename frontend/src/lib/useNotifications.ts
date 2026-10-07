@@ -12,6 +12,7 @@ export function buildNotices(queue: QueueItem[], assignments: ClassAssignment[],
     const at = item.updated_at || item.submitted_at;
     if (item.status === 'failed') return { id: 'failed:' + item.submission_id, kind: 'failed', title: `Grading failed for ${who}`, detail: item.error || item.paper_title, at, target: 'Marking queue' };
     if (item.status !== 'awaiting_review') return { id: 'processing:' + item.submission_id, kind: 'processing', title: `${who} submitted ${item.paper_title}`, detail: 'AI marking in progress', at: item.submitted_at, target: 'Marking queue' };
+    // The bell announces newly marked work; once the tutor opens a review it stops (the queue tracks the rest).
     if (item.review_saved_at) return null;
     return { id: 'review:' + item.submission_id, kind: item.flagged ? 'flagged' : 'review', title: `${who}’s work is ready for review`,
       detail: item.paper_title + ' / ' + item.class_name + (item.flagged ? ' / Flagged for a closer look' : ''), at, target: 'Marking queue' };

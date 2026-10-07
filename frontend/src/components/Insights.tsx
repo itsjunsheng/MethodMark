@@ -47,14 +47,15 @@ function ChartCard({ title, subtitle, table, children, className = '' }: { title
 export function TrendChart({ trend, height = 220 }: { trend: InsightTrend[]; height?: number }) {
   const [ref, width] = useWidth<HTMLDivElement>(560);
   const [active, setActive] = useState<number | null>(null);
-  const points = trend.map((row, index) => ({ ...row, index })).filter(row => row.average !== null);
+  // Only assignments with checked work take a position, so empty ones do not leave gaps.
+  const points = trend.filter(row => row.average !== null).map((row, index) => ({ ...row, index }));
   if (!points.length) return <div className="insights-plot" ref={ref}><p className="insights-empty-note">No checked work in this period yet.</p></div>;
   const left = 38, right = 18, top = 14, bottom = 30;
-  const x = (i: number) => trend.length === 1 ? (left + width - right) / 2 : left + i * (width - left - right) / (trend.length - 1);
+  const x = (i: number) => points.length === 1 ? (left + width - right) / 2 : left + i * (width - left - right) / (points.length - 1);
   const y = (value: number) => top + (100 - value) / 100 * (height - top - bottom);
   const line = points.map(row => `${x(row.index)},${y(row.average!)}`).join(' ');
-  const every = Math.max(1, Math.ceil(trend.length / Math.max(2, Math.floor(width / 90))));
-  const shown = active === null ? null : trend[active];
+  const every = Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(width / 90))));
+  const shown = active === null ? null : points[active];
   const move = (event: PointerEvent<SVGSVGElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
     const position = (event.clientX - box.left) * width / box.width;
@@ -76,7 +77,8 @@ export function TrendChart({ trend, height = 220 }: { trend: InsightTrend[]; hei
       <line className="insights-gap-line" x1={left} x2={width - right} y1={y(GAP)} y2={y(GAP)} />
       {points.length > 1 && <path className="insights-area" d={`M${x(points[0].index)},${y(0)} L${line.replaceAll(' ', ' L')} L${x(last.index)},${y(0)}Z`} />}
       <polyline className="insights-line" points={line} />
-      {trend.map((row, index) => index % every === 0 || index === trend.length - 1 ? <text key={row.assignment_id} className="insights-axis" x={x(index)} y={height - 8} textAnchor="middle">{shortDate(row.date)}</text> : null)}
+      {points.map((row, index) => (index % every === 0 || index === points.length - 1) && (index === 0 || shortDate(row.date) !== shortDate(points[index - 1].date))
+        ? <text key={row.assignment_id} className="insights-axis" x={x(index)} y={height - 8} textAnchor="middle">{shortDate(row.date)}</text> : null)}
       {active !== null && <line className="insights-crosshair" x1={x(active)} x2={x(active)} y1={top} y2={height - bottom} />}
       {points.map(row => <circle key={row.assignment_id} className="insights-dot" cx={x(row.index)} cy={y(row.average!)} r={active === row.index ? 6 : 4.5} />)}
       <text className="insights-end-label" x={Math.min(x(last.index) + 8, width - 4)} y={y(last.average!) - 10} textAnchor={x(last.index) > width - 60 ? 'end' : 'start'}>{pct(last.average)}</text>

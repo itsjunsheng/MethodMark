@@ -68,7 +68,8 @@ export default function App({ user, onLogout }: { user: User; onLogout: () => Pr
   const [selectedPaper, setSelectedPaper] = useState<Paper | null>(null);
   const [deletingPaper, setDeletingPaper] = useState<Paper | null>(null);
   const [publishPaper, setPublishPaper] = useState<Paper | null>(null);
-  const pending = (gradingData.data ?? []).filter(item => item.status === 'awaiting_review');
+  // Work counts as pending until the tutor saves a review, matching the notification bell.
+  const pending = (gradingData.data ?? []).filter(item => item.status === 'awaiting_review' && !item.review_saved_at);
   const notices = buildNotices(gradingData.data ?? [], assignmentData.data ?? []);
   const alerts = useNotifications(user.id, notices);
   const [noticeSince, setNoticeSince] = useState('');

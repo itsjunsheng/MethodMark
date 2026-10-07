@@ -183,6 +183,8 @@ def test_class_and_period_filters():
     everything = build_insights([ASSIGNMENT, OLD], STUDENTS, SUBMISSIONS, now=NOW)
     assert [row["name"] for row in everything["classes"]] == ["Old class", "Sec 3"]
     assert [row["title"] for row in everything["trend"]] == ["Weekly practice", "Weekly practice"]
+    # Each point names its class so the chart can draw one line per class.
+    assert [row["class_id"] for row in everything["trend"]] == [OTHER_CLASS, CLASS]
     assert everything["trend"][0]["average"] is None  # The old class has no checked work.
     recent = build_insights([ASSIGNMENT, OLD], STUDENTS, SUBMISSIONS, days=30, now=NOW)
     assert recent["summary"]["assignments"] == 1

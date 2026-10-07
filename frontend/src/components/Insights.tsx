@@ -44,47 +44,73 @@ function ChartCard({ title, subtitle, table, children, className = '' }: { title
   </section>;
 }
 
-export function TrendChart({ trend, height = 220 }: { trend: InsightTrend[]; height?: number }) {
+const CLASS_COLOURS = 6;
+
+export function TrendChart({ trend, classes, height = 220 }: { trend: InsightTrend[]; classes: Insights['classes']; height?: number }) {
   const [ref, width] = useWidth<HTMLDivElement>(560);
-  const [active, setActive] = useState<number | null>(null);
-  // Only assignments with checked work take a position, so empty ones do not leave gaps.
-  const points = trend.filter(row => row.average !== null).map((row, index) => ({ ...row, index }));
+  const [active, setActive] = useState<string | null>(null);
+  const order = classes.map(row => row.id);
+  const rank = (classId: string) => order.indexOf(classId);
+  // Only assignments with checked work are plotted; the table view lists every assignment.
+  const points = trend.filter(row => row.average !== null && row.date)
+    .map(row => ({ ...row, time: Date.parse(row.date!) }))
+    .sort((a, b) => a.time - b.time || rank(a.class_id) - rank(b.class_id));
   if (!points.length) return <div className="insights-plot" ref={ref}><p className="insights-empty-note">No checked work in this period yet.</p></div>;
-  const left = 38, right = 18, top = 14, bottom = 30;
-  const x = (i: number) => points.length === 1 ? (left + width - right) / 2 : left + i * (width - left - right) / (points.length - 1);
+  const series = [...new Set(points.map(row => row.class_id))].sort((a, b) => rank(a) - rank(b))
+    .map(id => ({ id, name: points.find(row => row.class_id === id)!.class_name, rows: points.filter(row => row.class_id === id) }));
+  // One line uses the series colour. With several, a class keeps its colour under any filter:
+  // colours follow the full class list, not what is shown.
+  const colour = (classId: string) => series.length === 1 ? 'var(--viz-series)'
+    : `var(--viz-class-${(Math.max(0, rank(classId)) % CLASS_COLOURS) + 1})`;
+  // The right margin holds each line's end label beside its last point.
+  const left = 38, right = 48, top = 14, bottom = 30;
+  // A real time axis: papers due close together sit close together, and one date is one position.
+  const first = points[0].time, final = points[points.length - 1].time, pad = (final - first) * 0.06;
+  const x = (time: number) => first === final ? (left + width - right) / 2
+    : left + (time - first + pad) / (final - first + 2 * pad) * (width - left - right);
   const y = (value: number) => top + (100 - value) / 100 * (height - top - bottom);
-  const line = points.map(row => `${x(row.index)},${y(row.average!)}`).join(' ');
-  const every = Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(width / 90))));
-  const shown = active === null ? null : points[active];
+  const path = (rows: typeof points) => rows.map(row => `${x(row.time)},${y(row.average!)}`).join(' ');
+  // Each due date is labelled once, and a label that would crowd the previous one is skipped.
+  const ticks = points.reduce<{ time: number; label: string }[]>((kept, row) => {
+    const label = shortDate(row.date), previous = kept[kept.length - 1];
+    return previous && (previous.label === label || x(row.time) - x(previous.time) < 56) ? kept : [...kept, { time: row.time, label }];
+  }, []);
+  // End labels sit level with each line's last point, nudged apart when two lines end close together.
+  const ends = series.map(line => { const row = line.rows[line.rows.length - 1]; return { line, row, labelY: y(row.average!) + 4 }; })
+    .sort((a, b) => a.labelY - b.labelY);
+  ends.forEach((end, index) => { if (index && end.labelY - ends[index - 1].labelY < 16) end.labelY = ends[index - 1].labelY + 16; });
+  const shown = points.find(row => row.assignment_id === active) ?? null;
   const move = (event: PointerEvent<SVGSVGElement>) => {
     const box = event.currentTarget.getBoundingClientRect();
-    const position = (event.clientX - box.left) * width / box.width;
-    setActive(points.reduce((best, row) => Math.abs(x(row.index) - position) < Math.abs(x(best.index) - position) ? row : best).index);
+    const px = (event.clientX - box.left) * width / box.width, py = (event.clientY - box.top) * height / box.height;
+    const distance = (row: typeof points[number]) => Math.hypot(x(row.time) - px, y(row.average!) - py);
+    setActive(points.reduce((best, row) => distance(row) < distance(best) ? row : best).assignment_id);
   };
   const key = (event: KeyboardEvent<SVGSVGElement>) => {
     if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
     event.preventDefault();
-    const at = points.findIndex(row => row.index === active);
+    const at = points.findIndex(row => row.assignment_id === active);
     const next = at === -1 ? points.length - 1 : Math.min(points.length - 1, Math.max(0, at + (event.key === 'ArrowRight' ? 1 : -1)));
-    setActive(points[next].index);
+    setActive(points[next].assignment_id);
   };
-  const last = points[points.length - 1];
+  const only = series.length === 1 ? series[0].rows : null;
   return <div className="insights-plot" ref={ref}>
+    {series.length > 1 && <ul className="insights-legend insights-trend-legend" aria-label="Classes">{series.map(line =>
+      <li key={line.id}><i className="insights-swatch" style={{ background: colour(line.id) }} />{line.name}</li>)}</ul>}
     <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} tabIndex={0} role="img"
-      aria-label={'Average score by assignment: ' + points.map(row => `${row.title} ${pct(row.average)}`).join(', ')}
-      onPointerMove={move} onPointerLeave={() => setActive(null)} onFocus={() => setActive(last.index)} onBlur={() => setActive(null)} onKeyDown={key}>
+      aria-label={'Average score by assignment: ' + points.map(row => `${row.title} (${row.class_name}) ${pct(row.average)}`).join(', ')}
+      onPointerMove={move} onPointerLeave={() => setActive(null)} onFocus={() => setActive(points[points.length - 1].assignment_id)} onBlur={() => setActive(null)} onKeyDown={key}>
       {[0, 25, 50, 75, 100].map(value => <g key={value} className="insights-gridline"><line x1={left} x2={width - right} y1={y(value)} y2={y(value)} /><text x={left - 8} y={y(value) + 4} textAnchor="end">{value}%</text></g>)}
       <line className="insights-gap-line" x1={left} x2={width - right} y1={y(GAP)} y2={y(GAP)} />
-      {points.length > 1 && <path className="insights-area" d={`M${x(points[0].index)},${y(0)} L${line.replaceAll(' ', ' L')} L${x(last.index)},${y(0)}Z`} />}
-      <polyline className="insights-line" points={line} />
-      {points.map((row, index) => (index % every === 0 || index === points.length - 1) && (index === 0 || shortDate(row.date) !== shortDate(points[index - 1].date))
-        ? <text key={row.assignment_id} className="insights-axis" x={x(index)} y={height - 8} textAnchor="middle">{shortDate(row.date)}</text> : null)}
-      {active !== null && <line className="insights-crosshair" x1={x(active)} x2={x(active)} y1={top} y2={height - bottom} />}
-      {points.map(row => <circle key={row.assignment_id} className="insights-dot" cx={x(row.index)} cy={y(row.average!)} r={active === row.index ? 6 : 4.5} />)}
-      <text className="insights-end-label" x={Math.min(x(last.index) + 8, width - 4)} y={y(last.average!) - 10} textAnchor={x(last.index) > width - 60 ? 'end' : 'start'}>{pct(last.average)}</text>
+      {only && only.length > 1 && <path className="insights-area" d={`M${x(only[0].time)},${y(0)} L${path(only).replaceAll(' ', ' L')} L${x(only[only.length - 1].time)},${y(0)}Z`} />}
+      {series.map(line => line.rows.length > 1 && <polyline key={line.id} className="insights-line" style={{ stroke: colour(line.id) }} points={path(line.rows)} />)}
+      {ticks.map(tick => <text key={tick.time} className="insights-axis" x={x(tick.time)} y={height - 8} textAnchor="middle">{tick.label}</text>)}
+      {shown && <line className="insights-crosshair" x1={x(shown.time)} x2={x(shown.time)} y1={top} y2={height - bottom} />}
+      {points.map(row => <circle key={row.assignment_id} className="insights-dot" style={{ fill: colour(row.class_id) }} cx={x(row.time)} cy={y(row.average!)} r={active === row.assignment_id ? 6 : 4.5} />)}
+      {ends.map(({ line, row, labelY }) => <text key={line.id} className="insights-end-label" x={x(row.time) + 10} y={labelY}>{pct(row.average)}</text>)}
     </svg>
-    {shown && shown.average !== null && <div className="insights-tooltip" style={{ left: Math.min(Math.max(x(active!), 90), width - 90) }} role="status">
-      <strong>{pct(shown.average)}</strong><span>{shown.title}</span><small>{shown.class_name} · {shortDate(shown.date)} · {shown.reviewed} of {shown.submitted} fully reviewed</small>
+    {shown && <div className="insights-tooltip" style={{ left: Math.min(Math.max(x(shown.time), 90), width - 90) }} role="status">
+      <strong>{pct(shown.average)}</strong><span>{shown.title}</span><small>{shown.class_name} · due {shortDate(shown.date)} · {shown.reviewed} of {shown.submitted} fully reviewed</small>
     </div>}
   </div>;
 }
@@ -222,7 +248,7 @@ export function InsightsPage({ onReview }: { onReview: () => void }) {
     <div className="insights-board">
       <ChartCard title="Score trend" subtitle="Average score per assignment. The faint line marks 60%." className="span-2"
         table={<table><thead><tr><th>Assignment</th><th>Class</th><th>Date</th><th>Average</th><th>Fully reviewed</th></tr></thead><tbody>{data.trend.map(row => <tr key={row.assignment_id}><td>{row.title}</td><td>{row.class_name}</td><td>{shortDate(row.date)}</td><td>{pct(row.average)}</td><td>{row.reviewed} / {row.submitted}</td></tr>)}</tbody></table>}>
-        <TrendChart trend={data.trend} />
+        <TrendChart trend={data.trend} classes={data.classes} />
       </ChartCard>
       <ChartCard title="Score spread" subtitle="Fully reviewed submissions by score"
         table={<table><thead><tr><th>Score</th><th>Submissions</th></tr></thead><tbody>{data.distribution.map(bin => <tr key={bin.label}><td>{bin.label}</td><td>{bin.count}</td></tr>)}</tbody></table>}>

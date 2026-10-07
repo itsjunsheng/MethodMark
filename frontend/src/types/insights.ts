@@ -1,4 +1,4 @@
-export type InsightTrend = { assignment_id: string; title: string; class_name: string; date: string | null;
+export type InsightTrend = { assignment_id: string; title: string; class_id: string; class_name: string; date: string | null;
   average: number | null; reviewed: number; submitted: number };
 export type InsightStatus = { assignment_id: string; title: string; class_name: string; due_at: string | null; students: number;
   submitted: number; not_submitted: number; processing: number; awaiting_review: number; failed: number; reviewed: number };

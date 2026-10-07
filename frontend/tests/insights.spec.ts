@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { test, expect, type Page } from '@playwright/test';
 import { mockAuth } from './helpers/auth';
-import { mockInsights, emptyInsights } from './helpers/insights';
+import { mockInsights, emptyInsights, sampleInsights } from './helpers/insights';
 
 test.beforeEach(async ({ page }) => { await mockAuth(page, true); });
 
@@ -20,7 +20,7 @@ test('overview shows real checked-work figures instead of sample data', async ({
   await expect(stats.getByText('65%')).toBeVisible();
   await expect(stats.getByText('From 52 checked parts')).toBeVisible();
   await expect(stats.getByText('48')).toHaveCount(0);
-  await expect(page.getByRole('img', { name: /Average score by assignment: Algebra checkpoint 58%, Quadratics practice 71%/ })).toBeVisible();
+  await expect(page.getByRole('img', { name: /Average score by assignment: Algebra checkpoint \(Saturday maths\) 58%, Quadratics practice \(Saturday maths\) 71%/ })).toBeVisible();
 });
 
 test('insights summarise checked work, with tables, tooltips and student drill-down', async ({ page }) => {
@@ -98,4 +98,30 @@ test('insights fit a phone without horizontal scrolling', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Summary' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/insights-mobile.png', fullPage: true });
+});
+
+test('the score trend draws one line per class on a time axis', async ({ page }) => {
+  const [saturday, sunday] = sampleInsights.classes.map(row => row.id);
+  const row = (assignment_id: string, title: string, class_id: string, date: string, average: number | null) => ({ assignment_id, title, class_id,
+    class_name: class_id === saturday ? 'Saturday maths' : 'Sunday maths', date, average, reviewed: 2, submitted: 3 });
+  await mockInsights(page, { ...sampleInsights, trend: [
+    row('a1', 'Quadratics', saturday, '2026-10-01T15:59:00Z', 50),
+    row('a2', 'Straight lines', saturday, '2026-10-15T15:59:00Z', 70),
+    row('a3', 'Percentages', sunday, '2026-10-15T15:59:00Z', 40),
+    row('a4', 'Probability', sunday, '2026-10-20T15:59:00Z', null),
+  ] });
+  await openInsights(page);
+  const card = page.locator('section.insights-card', { has: page.getByRole('heading', { name: 'Score trend' }) });
+  await expect(card.getByRole('list', { name: 'Classes' }).getByRole('listitem')).toHaveText(['Saturday maths', 'Sunday maths']);
+  // Two papers due the same day share one position and one label; unchecked work is not plotted.
+  await expect(card.locator('.insights-axis')).toHaveText(['1 Oct', '15 Oct']);
+  await expect(card.locator('.insights-dot')).toHaveCount(3);
+  // Each class keeps its own line and colour: Saturday has two points, Sunday one.
+  await expect(card.locator('.insights-line')).toHaveCount(1);
+  await expect(card.locator('.insights-dot[style*="--viz-class-2"]')).toHaveCount(1);
+  const trend = card.getByRole('img', { name: /Percentages \(Sunday maths\) 40%/ });
+  await trend.focus();
+  await expect(page.getByRole('status').filter({ hasText: 'Percentages' })).toContainText('Sunday maths · due 15 Oct');
+  await trend.press('ArrowLeft');
+  await expect(page.getByRole('status').filter({ hasText: 'Straight lines' })).toBeVisible();
 });

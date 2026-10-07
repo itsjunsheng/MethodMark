@@ -283,6 +283,7 @@ def build_insights(assignments, students, submissions, class_id=None, days=None,
             {
                 "assignment_id": assignment["id"],
                 "title": title,
+                "class_id": assignment["class_id"],
                 "class_name": assignment["classes"]["name"],
                 "date": assignment["due_at"] or assignment["published_at"],
                 "average": percent(assignment_tally),

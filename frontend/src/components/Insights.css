@@ -1,5 +1,7 @@
 /* Chart roles validated with the dataviz palette checks: series #3f8a5f, ordinal status ramp
    #8aad97 / #5c876e / #2f5847 on white. Status colours always ship with a text label. */
+/* Class colours in fixed order, checked for colour-blind separation (validate_palette.js). */
+:root { --viz-class-1: #3f8a5f; --viz-class-2: #2a78d6; --viz-class-3: #eb6834; --viz-class-4: #4a3aa7; --viz-class-5: #e87ba4; --viz-class-6: #eda100; }
 :root { --viz-series: #3f8a5f; --viz-series-hover: #57a077; --viz-wash: rgba(63, 138, 95, .1); --viz-grid: #e9ece6; --viz-axis: #c8cec5;
   --viz-ink: #23362c; --viz-ink-2: #4f5a4d; --viz-muted: #6f776b; --viz-warning: #fab219; --viz-critical: #d03b3b; --viz-track: #eef1ec; }
 .insights-page > * { transition: opacity .2s; }
@@ -42,7 +44,7 @@
 .insights-line { fill: none; stroke: var(--viz-series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .insights-dot { fill: var(--viz-series); stroke: #fff; stroke-width: 2; transition: r .15s; }
 .insights-crosshair { stroke: #b9c1b6; stroke-width: 1; }
-.insights-end-label { fill: var(--viz-ink); font-size: 12px; font-weight: 600; }
+.insights-end-label { fill: var(--viz-ink); font-size: 12px; font-weight: 600; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
 .insights-tooltip { position: absolute; top: 4px; transform: translateX(-50%); display: grid; gap: 2px; max-width: 220px; padding: 9px 11px; border: 1px solid rgba(11, 11, 11, .1); border-radius: 8px; background: #fff; box-shadow: 0 8px 24px #1f2e2414; pointer-events: none; }
 .insights-tooltip strong { font-size: 16px; color: var(--viz-ink); }
 .insights-tooltip span { font-size: 12px; color: var(--viz-ink-2); }
@@ -74,6 +76,7 @@
 .insights-mistakes blockquote { margin: 8px 0 0; padding-left: 10px; border-left: 2px solid #dfe6da; font-size: 12px; font-style: italic; color: #5f685c; }
 .insights-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 0 23px 8px; font-size: 12px; color: var(--viz-ink-2); }
 .insights-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.insights-trend-legend { padding: 0 0 8px; }
 .insights-swatch { width: 10px; height: 10px; border-radius: 3px; }
 .stage-reviewed { background: #2f5847; }
 .stage-awaiting_review { background: #5c876e; }

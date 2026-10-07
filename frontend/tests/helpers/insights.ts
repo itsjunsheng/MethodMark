@@ -28,9 +28,9 @@ export const sampleInsights: Insights = {
     { assignment_id: 'a3', title: 'Coordinate geometry', class_name: 'Sunday maths', due_at: '2026-10-09T15:59:00Z', students: 4, submitted: 1, not_submitted: 3, processing: 1, awaiting_review: 0, failed: 0, reviewed: 0 },
   ],
   trend: [
-    { assignment_id: 'a1', title: 'Algebra checkpoint', class_name: 'Saturday maths', date: '2026-09-20T15:59:00Z', average: 58.3, reviewed: 6, submitted: 7 },
-    { assignment_id: 'a2', title: 'Quadratics practice', class_name: 'Saturday maths', date: '2026-10-02T15:59:00Z', average: 71.4, reviewed: 4, submitted: 6 },
-    { assignment_id: 'a3', title: 'Coordinate geometry', class_name: 'Sunday maths', date: '2026-10-09T15:59:00Z', average: null, reviewed: 0, submitted: 1 },
+    { assignment_id: 'a1', title: 'Algebra checkpoint', class_id: '40000000-0000-4000-8000-000000000001', class_name: 'Saturday maths', date: '2026-09-20T15:59:00Z', average: 58.3, reviewed: 6, submitted: 7 },
+    { assignment_id: 'a2', title: 'Quadratics practice', class_id: '40000000-0000-4000-8000-000000000001', class_name: 'Saturday maths', date: '2026-10-02T15:59:00Z', average: 71.4, reviewed: 4, submitted: 6 },
+    { assignment_id: 'a3', title: 'Coordinate geometry', class_id: '40000000-0000-4000-8000-000000000002', class_name: 'Sunday maths', date: '2026-10-09T15:59:00Z', average: null, reviewed: 0, submitted: 1 },
   ],
   distribution: [{ label: '0–19%', count: 0 }, { label: '20–39%', count: 1 }, { label: '40–59%', count: 3 }, { label: '60–79%', count: 4 }, { label: '80–100%', count: 2 }],
   topics: [

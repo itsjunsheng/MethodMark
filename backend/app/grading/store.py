@@ -7,6 +7,7 @@ import httpx
 from fastapi import HTTPException
 
 from app.grading.evidence import photo_content
+from app.grading.pipeline import review_complete
 from app.grading.schemas import GradingError
 from app.services.assignments import BUCKET, AssignmentStore
 
@@ -42,7 +43,8 @@ class GradingStore(AssignmentStore):
                 params={
                     "select": (
                         "submission_id,status,flagged,error,attempts,version,review_saved_at,"
-                        "created_at,updated_at,submissions!inner(student_code,submitted_at,"
+                        "review_draft,created_at,updated_at,"
+                        "submissions!inner(student_code,submitted_at,"
                         "students(name),assignments!inner(tutor_id,classes(name),papers(title)))"
                     ),
                     "submissions.assignments.tutor_id": "eq." + tutor_id,
@@ -54,7 +56,9 @@ class GradingStore(AssignmentStore):
             for row in batch:
                 submission = row.pop("submissions")
                 assignment = submission["assignments"]
+                # The list only says whether the review is finished; drafts stay in the detail.
                 row.update(
+                    review_complete=review_complete(row.pop("review_draft", None)),
                     student_code=submission["student_code"],
                     student_name=(submission.get("students") or {}).get("name"),
                     paper_title=assignment["papers"]["title"],

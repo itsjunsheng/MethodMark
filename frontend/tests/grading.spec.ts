@@ -52,7 +52,7 @@ async function mockGrading(page: Page) {
 }
 async function openQueue(page: Page) {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Good morning, Jun.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Jun\./ })).toBeVisible();
   if (await page.getByRole('button', { name: 'Open navigation', exact: true }).isVisible())
     await page.getByRole('button', { name: 'Open navigation', exact: true }).click();
   await page.locator('.sidebar').getByRole('button', { name: 'Marking queue', exact: true }).click();
@@ -121,4 +121,28 @@ for (const width of [390, 768]) test('review is usable at ' + width + 'px', asyn
   await page.getByRole('button', { name: 'Save review draft' }).click();
   await expect(page.getByRole('status')).toContainText('Review draft saved');
   await dialog.screenshot({ path: 'test-results/grading-review-' + width + '.png' });
+});
+
+test('every screen agrees on what still needs review', async ({ page }) => {
+  await mockAuth(page, true);
+  const row = (submission_id: string, student_name: string, extra = {}) => ({ ...item, submission_id, student_name, flagged: false, review_complete: false, ...extra });
+  await page.route('**/api/v1/grading**', route => route.fulfill({ json: [
+    row('1', 'Aisha', { flagged: true }),
+    row('2', 'Ben', { review_saved_at: '2026-10-01T00:00:00Z' }),
+    row('3', 'Chen', { flagged: true, review_saved_at: '2026-10-01T00:00:00Z', review_complete: true }),
+  ] }));
+  await openQueue(page);
+  // A half-finished review still needs work; a finished one does not, wherever it is counted.
+  await expect(page.locator('.nav-count')).toHaveText('2');
+  for (const [tab, count] of [['Awaiting review', 2], ['Flagged', 1], ['Reviewed', 1], ['All submissions', 3]] as const)
+    await expect(page.getByRole('button', { name: `${tab} ${count}`, exact: true })).toBeVisible();
+  const list = page.locator('.grading-list');
+  await expect(list.locator('li', { hasText: 'Aisha' })).toContainText('Awaiting review');
+  await expect(list.locator('li', { hasText: 'Ben' })).toContainText('Review in progress');
+  await expect(list.locator('li', { hasText: 'Chen' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Reviewed 1', exact: true }).click();
+  await expect(list.locator('li', { hasText: 'Chen' })).toContainText('Reviewed');
+  await expect(list.locator('li', { hasText: 'Chen' })).not.toContainText('Needs a closer look');
+  await page.locator('.sidebar').getByRole('button', { name: 'Overview', exact: true }).click();
+  await expect(page.locator('.stat-card', { hasText: 'Awaiting review' }).locator('.stat-number')).toHaveText('2');
 });

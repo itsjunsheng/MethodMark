@@ -44,6 +44,9 @@ and save tutor review drafts. Result approval, release and student results are n
    use **Processing** to see queued/in-progress work. Completed assessments appear under
    **Awaiting review**; inspect original work, transcription, rubric points and feedback.
    Edit marks or feedback and **Save review draft**. Students cannot see these drafts.
+   Once every part is ticked **I have checked this part**, the submission moves to **Reviewed**;
+   a partly checked draft shows **Review in progress** and stays under **Awaiting review**.
+   The queue's `review_complete` field carries this rule, which Insights also uses.
 
 The worker must remain running separately from Uvicorn. Without it, submissions stay queued.
 Restart it after changing provider settings. Missing keys stop the worker with a configuration
@@ -66,7 +69,10 @@ After correcting the issue, choose **Retry grading**, or **Review manually**.
   second model call assesses each rubric point, with independent method and accuracy credit
   where the rubric permits. All calls use strict JSON schemas. Student content is evidence,
   never instructions. Question/part/point coverage, integer limits and supporting excerpts
-  are checked again in code. Unreadable evidence stays unassessed and flagged.
+  are checked again in code. Unreadable evidence stays unassessed and flagged. A part the model
+  omits is blank when no answer space or photo was submitted for it; otherwise it, and any
+  missing, repeated or unknown rubric point, stays unassessed and flagged instead of failing
+  the whole submission. Marks outside the rubric limits still fail the job.
 - The approved solution and rubric come from `papers.questions_snapshot`, which copies the
   question bank at publication. Later bank edits cannot silently change an assignment's marks.
   Missing or incomplete rubrics fail safely rather than inventing criteria.

@@ -5,6 +5,7 @@ import { test, expect } from '@playwright/test';
 import { drawStroke } from './helpers/handwriting';
 import bankFixture from './fixtures/questions.json' with { type: 'json' };
 import { selectPaperScope } from './helpers/paperBuilder';
+import { mockInsights } from './helpers/insights';
 
 test.beforeEach(async ({ page }) => { await mockAuth(page, true); await mockClasses(page); });
 
@@ -15,12 +16,12 @@ test('overview renders without browser errors and navigation works', async ({ pa
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Good morning, Jun.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Jun\./ })).toBeVisible();
   await page.screenshot({ path: 'test-results/overview-desktop.png', fullPage: true });
   await page.locator('.sidebar').getByRole('button', { name: 'Notifications', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button', { name: 'Close dialog' }).click();
-  await expect(page.getByRole('heading', { name: 'Good morning, Jun.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Jun\./ })).toBeVisible();
   for (const name of ['Practice papers', 'Assignments', 'Marking queue', 'Classes & students', 'Insights']) {
     await page.locator('.sidebar').getByRole('button', { name, exact: true }).click();
     await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
@@ -57,13 +58,13 @@ test('a paper must be reviewed before it can be published and persists after rel
 });
 
 
-test('report export downloads', async ({ page }) => {
+test('report export downloads real insights from the overview', async ({ page }) => {
+  await mockInsights(page);
   await page.goto('/');
-  await page.locator('.sidebar').getByRole('button', { name: 'Insights', exact: true }).click();
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export report' }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe('methodmark-sample-performance.csv');
+  expect(download.suggestedFilename()).toBe('methodmark-insights.csv');
 });
 
 test('mobile dashboard has no horizontal overflow and menu is usable', async ({ page }) => {

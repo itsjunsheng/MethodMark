@@ -37,9 +37,9 @@ test('login protects the workspace, persists the session, and logout prevents ba
   await page.getByRole('button', { name: 'Show password' }).click();
   await expect(page.locator('input[name="password"]')).toHaveAttribute('type', 'text');
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Good morning, Jun.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Jun\./ })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Good morning, Jun.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Jun\./ })).toBeVisible();
   await page.locator('.sidebar .profile').click();
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
@@ -135,7 +135,7 @@ test('an unverifiable stored session cannot open tutor content', async ({ page }
 test('another tutor does not inherit the previous account profile or papers', async ({ page }) => {
   await mockAuth(page, true);
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Good morning, Jun.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Jun\./ })).toBeVisible();
   await page.evaluate(() => localStorage.setItem('methodmark:20000000-0000-4000-8000-000000000001:papers:v1', JSON.stringify([])));
   await page.locator('.sidebar .profile').click();
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
@@ -145,7 +145,7 @@ test('another tutor does not inherit the previous account profile or papers', as
   await page.getByLabel('Email address').fill('another@example.com');
   await page.getByLabel('Password', { exact: true }).fill('Another-password-123');
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Good morning, Another.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Another\./ })).toBeVisible();
   await page.getByRole('button', { name: 'Practice papers', exact: true }).click();
   await expect(page.locator('.paper-card')).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('methodmark:20000000-0000-4000-8000-000000000001:papers:v1'))).toBe('[]');

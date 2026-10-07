@@ -128,21 +128,68 @@ def test_positive_award_requires_literal_transcription_evidence():
     assert part["points"][0]["awarded"] is None and part["flags"]
 
 
-@pytest.mark.parametrize("defect", ["excess", "negative", "unknown", "duplicate", "missing"])
-def test_model_cannot_change_rubric_or_award_invalid_marks(defect):
+@pytest.mark.parametrize("defect", ["excess", "negative"])
+def test_model_cannot_award_marks_outside_the_rubric(defect):
     marked = assessment()
-    if defect == "excess":
-        marked.parts[0].points[0].awarded = 2
-    if defect == "negative":
-        marked.parts[0].points[0].awarded = -1
+    marked.parts[0].points[0].awarded = 2 if defect == "excess" else -1
+    with pytest.raises(GradingError):
+        run_grade(provider(marked=marked))
+
+
+@pytest.mark.parametrize(
+    "defect,awards",
+    [("unknown", [None, None]), ("duplicate", [None, None]), ("missing", [1, None])],
+)
+def test_unmatched_rubric_points_are_left_for_the_tutor_not_invented(defect, awards):
+    marked = assessment()
     if defect == "unknown":
         marked.parts[0].points[0].point_id = "invented"
     if defect == "duplicate":
         marked.parts[0].points.append(marked.parts[0].points[0])
     if defect == "missing":
         marked.parts[0].points.pop()
-    with pytest.raises(GradingError):
-        run_grade(provider(marked=marked))
+    part = run_grade(provider(marked=marked))["questions"][0]["parts"][0]
+    assert [point["awarded"] for point in part["points"]] == awards
+    assert "Check marking point A1." in part["flags"]
+
+
+def two_part_paper():
+    source = paper()
+    bank = source["questions_snapshot"][0]["bankQuestion"]
+    for section in ["question_content", "solution", "marking_rubric"]:
+        part = deepcopy(bank[section]["parts"][0])
+        part["id" if section == "question_content" else "part_id"] = "b"
+        if section == "question_content":
+            part["label"] = "(b)"
+        bank[section]["parts"].append(part)
+    return source
+
+
+def test_a_part_the_model_omits_is_blank_when_unanswered_and_flagged_when_answered():
+    # Part (b) left blank: the model returning only the answered part must not fail the paper.
+    result = run_grade(provider(), source=two_part_paper())
+    main, part_b = result["questions"][0]["parts"]
+    assert [point["awarded"] for point in main["points"]] == [1, 0]
+    assert part_b["legibility"] == "blank"
+    assert [point["awarded"] for point in part_b["points"]] == [0, 0]
+    # Part (b) answered but missing from the reading: unassessed and flagged, never zero.
+    work = {"drawing": {**DRAWING, '["q1","b"]': [[[0.1, 0.2], [0.3, 0.4]]]}}
+    result = run_grade(provider(), work, source=two_part_paper())
+    main, part_b = result["questions"][0]["parts"]
+    assert [point["awarded"] for point in main["points"]] == [1, 0]
+    assert all(point["awarded"] is None for point in part_b["points"])
+    assert "The AI did not return a reading for this part." in part_b["flags"]
+
+
+def test_a_part_the_model_does_not_assess_is_flagged_for_the_tutor():
+    read = reading()
+    read.parts.append(read.parts[0].model_copy(update={"part_id": "b", "text": "x = 3"}))
+    work = {"drawing": {**DRAWING, '["q1","b"]': [[[0.1, 0.2], [0.3, 0.4]]]}}
+    result = run_grade(provider(read), work, source=two_part_paper())
+    main, part_b = result["questions"][0]["parts"]
+    assert [point["awarded"] for point in main["points"]] == [1, 0]
+    assert all(point["awarded"] is None for point in part_b["points"])
+    assert "The AI did not assess this part." in part_b["flags"]
 
 
 def test_missing_rubric_stops_before_any_model_request():
@@ -371,6 +418,38 @@ def test_store_scopes_reads_and_checks_optimistic_version_and_worker_lease():
                 await db.edit(job(), {}, tutor_id="owner")
             assert error.value.status_code == 409
             assert db.request.await_args.kwargs["params"]["version"] == "eq.2"
+
+    asyncio.run(run())
+
+
+def test_queue_says_whether_each_review_is_complete_without_sending_drafts():
+    def part(part_id, checked):
+        return {"part_id": part_id, "points": [], "feedback": "", "checked": checked}
+
+    def row(draft):
+        return {
+            "submission_id": SUBMISSION,
+            "status": "awaiting_review",
+            "review_saved_at": "2026-10-08T00:00:00Z" if draft else None,
+            "review_draft": draft,
+            "submissions": {
+                "student_code": "blue-otter",
+                "submitted_at": "2026-10-07T00:00:00Z",
+                "students": {"name": "Aisha"},
+                "assignments": {"classes": {"name": "Sec 3"}, "papers": {"title": "Algebra"}},
+            },
+        }
+
+    done = {"questions": [{"question_id": "q1", "parts": [part("a", True), part("b", True)]}]}
+    partial = {"questions": [{"question_id": "q1", "parts": [part("a", True), part("b", False)]}]}
+
+    async def run():
+        async with httpx.AsyncClient() as client:
+            db = GradingStore(settings(), client)
+            db.request = AsyncMock(return_value=[row(done), row(partial), row(None)])
+            rows = await db.queue("owner")
+            assert [item["review_complete"] for item in rows] == [True, False, False]
+            assert all("review_draft" not in item for item in rows)
 
     asyncio.run(run())
 

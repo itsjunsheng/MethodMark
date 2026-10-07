@@ -3,7 +3,7 @@ import { mockAuth } from './helpers/auth';
 import { mockClasses } from './helpers/classes';
 
 async function openClasses(page: Page) {
-  await expect(page.getByRole('heading', { name: 'Good morning, Jun.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), Jun\./ })).toBeVisible();
   if (await page.getByRole('button', { name: 'Open navigation' }).isVisible()) {
     await page.getByRole('button', { name: 'Open navigation' }).click();
   }

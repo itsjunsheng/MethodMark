@@ -16,6 +16,8 @@
 .grading-row-actions .btn { min-height:36px; padding:8px 12px; font-size:12px; }
 .grading-status { font-size:12px; color:#6f8070; }
 .grading-status.awaiting_review { color:#376d52; }
+.grading-status.in_progress { color:#85570a; }
+.grading-status.reviewed { color:#315c4b; font-weight:600; }
 .grading-status.failed,.grading-error { color:#a35a48; }
 .grading-error { margin-top:8px; font-size:12px; line-height:1.6; }
 .modal.grading-review-modal { max-width:1250px; }

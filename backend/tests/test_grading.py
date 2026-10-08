@@ -390,7 +390,7 @@ def test_retry_only_failed_unreviewed_jobs_and_manual_scaffold():
         )
         assert client.post(f"/api/v1/grading/{SUBMISSION}/retry").status_code == 200
         assert db.edit.await_args.args[1]["attempts"] == 0
-        for state in ["queued", "processing", "awaiting_review"]:
+        for state in ["submitted", "queued", "processing", "awaiting_review"]:
             db.owned_job.side_effect = lambda *_, state=state: job(state)
             assert client.post(f"/api/v1/grading/{SUBMISSION}/retry").status_code == 409
 
@@ -436,7 +436,10 @@ def test_queue_says_whether_each_review_is_complete_without_sending_drafts():
                 "student_code": "blue-otter",
                 "submitted_at": "2026-10-07T00:00:00Z",
                 "students": {"name": "Aisha"},
-                "assignments": {"classes": {"name": "Sec 3"}, "papers": {"title": "Algebra"}},
+                "assignments": {
+                    "class_id": "class-1", "classes": {"name": "Sec 3"},
+                    "papers": {"title": "Algebra"},
+                },
             },
         }
 
@@ -450,8 +453,58 @@ def test_queue_says_whether_each_review_is_complete_without_sending_drafts():
             rows = await db.queue("owner")
             assert [item["review_complete"] for item in rows] == [True, False, False]
             assert all("review_draft" not in item for item in rows)
+            assert all(item["class_id"] == "class-1" for item in rows)
 
     asyncio.run(run())
+
+
+def test_send_class_requires_authentication_and_uses_authenticated_tutor():
+    db = AsyncMock(send_class=AsyncMock(return_value=2))
+    path = f"/api/v1/grading/classes/{SUBMISSION}/send"
+    with api(db, False) as client:
+        assert client.post(path).status_code == 401
+    db.send_class.assert_not_awaited()
+    with api(db) as client:
+        response = client.post(path, json={"tutor_id": "someone-else"})
+        assert response.status_code == 200
+        assert response.json() == {"queued": 2}
+        db.send_class.assert_awaited_once_with(SUBMISSION, "tutor")
+        assert client.post("/api/v1/grading/classes/invalid/send").status_code == 422
+        db.send_class.side_effect = HTTPException(404, "This class is unavailable.")
+        assert client.post(path).status_code == 404
+
+
+def test_send_class_rejects_unowned_classes_before_queueing():
+    async def run():
+        async with httpx.AsyncClient() as client:
+            db = GradingStore(settings(), client)
+            db.request = AsyncMock(return_value=[])
+            with pytest.raises(HTTPException) as error:
+                await db.send_class("class-1", "owner")
+            assert error.value.status_code == 404
+            assert db.request.await_count == 1
+            assert db.request.await_args.kwargs["params"] == {
+                "id": "eq.class-1", "tutor_id": "eq.owner", "select": "id",
+            }
+            db.request = AsyncMock(side_effect=[[{"id": "class-1"}], 2])
+            assert await db.send_class("class-1", "owner") == 2
+            assert db.request.await_args.args == ("POST", "/rest/v1/rpc/send_class_for_grading")
+            assert db.request.await_args.kwargs["json"] == {
+                "p_class_id": "class-1", "p_tutor_id": "owner",
+            }
+
+    asyncio.run(run())
+
+
+def test_unsent_submissions_cannot_be_reviewed_or_retried():
+    db = AsyncMock(owned_job=AsyncMock(side_effect=lambda *_: job("submitted")))
+    with api(db) as client:
+        assert client.get(f"/api/v1/grading/{SUBMISSION}").status_code == 409
+        assert client.post(f"/api/v1/grading/{SUBMISSION}/retry").status_code == 409
+        assert client.put(
+            f"/api/v1/grading/{SUBMISSION}/review", json={"version": 2, "draft": draft()}
+        ).status_code == 409
+    db.edit.assert_not_awaited()
 
 
 def test_worker_persists_provisional_results_or_safe_failure_and_never_releases():

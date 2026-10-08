@@ -82,6 +82,17 @@ export async function listSubmissions(assignmentId: string, signal: AbortSignal)
   check(error);
   return (data ?? []) as unknown as SubmissionSummary[];
 }
+export async function deleteAssignment(id: string): Promise<void> {
+  const { data } = await client().auth.getSession();
+  if (!data.session) throw new Error('Please log in again to delete this assignment.');
+  const response = await fetch('/api/v1/assignments/' + encodeURIComponent(id), {
+    method: 'DELETE', headers: { Authorization: 'Bearer ' + data.session.access_token },
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(typeof body?.detail === 'string' ? body.detail : 'Could not delete this assignment. Please try again.');
+  }
+}
 export async function getSubmission(id: string): Promise<Submission> {
   const { data, error } = await client().from('submissions').select('*,students!inner(name)').eq('id', id).single();
   check(error);

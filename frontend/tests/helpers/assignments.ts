@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import type { Paper } from '../../src/data';
 import type { ClassAssignment } from '../../src/types/assignments';
 import { mockClasses } from './classes';
@@ -16,7 +16,7 @@ export const testToken = '30000000-0000-4000-8000-000000000001';
 
 export async function mockAssignments(page: Page, school?: Awaited<ReturnType<typeof mockClasses>>) {
   const state = { papers: [] as SavedPaper[], assignments: [] as ClassAssignment[], submissions: [] as Work[],
-    failSave: false, failPublish: false, failSubmit: false, failLoad: false };
+    failSave: false, failPublish: false, failSubmit: false, failLoad: false, failDeleteAssignment: false };
   const summary = (item: ClassAssignment) => {
     const members = school?.students.filter(row => row.class_id === item.class_id && row.is_active) ?? [];
     return { ...item, student_count: members.length,
@@ -77,6 +77,21 @@ export async function mockAssignments(page: Page, school?: Awaited<ReturnType<ty
     }
     return route.fallback();
   });
+  await page.route('**/api/v1/assignments/*', async route => {
+    const request = route.request();
+    expect(request.method()).toBe('DELETE');
+    expect(request.headers().authorization).toMatch(/^Bearer /);
+    if (state.failDeleteAssignment) return route.fulfill({ status: 503, json: { detail: 'Could not delete this assignment. Please try again.' } });
+    const id = new URL(request.url()).pathname.split('/').at(-1);
+    state.assignments = state.assignments.filter(a => a.id !== id);
+    state.submissions = state.submissions.filter(s => s.assignment_id !== id);
+    return route.fulfill({ status: 204, body: '' });
+  });
+  if (school) school.onClassDeleted = classId => {
+    const removed = new Set(state.assignments.filter(a => a.class_id === classId).map(a => a.id));
+    state.assignments = state.assignments.filter(a => a.class_id !== classId);
+    state.submissions = state.submissions.filter(s => !removed.has(s.assignment_id));
+  };
   await page.route('**/api/v1/student/assignments/**', async route => {
     const request = route.request(), segments = new URL(request.url()).pathname.split('/');
     const assignment = state.assignments.find(a => a.share_token === segments[5]);

@@ -153,7 +153,7 @@ function TopicBars({ topics }: { topics: InsightTopic[] }) {
 
 const stages = [
   { key: 'reviewed', label: 'Reviewed' }, { key: 'awaiting_review', label: 'Awaiting review' }, { key: 'processing', label: 'Processing' },
-  { key: 'failed', label: 'Grading failed' }, { key: 'not_submitted', label: 'Not submitted' },
+  { key: 'failed', label: 'Grading failed' }, { key: 'awaiting_grading', label: 'Not yet sent for grading' }, { key: 'not_submitted', label: 'Not submitted' },
 ] as const;
 
 function StatusBars({ status }: { status: InsightStatus[] }) {
@@ -161,12 +161,12 @@ function StatusBars({ status }: { status: InsightStatus[] }) {
   return <>
     <ul className="insights-legend" aria-label="Legend">{stages.map(stage => <li key={stage.key}><i className={'insights-swatch stage-' + stage.key} />{stage.label}</li>)}</ul>
     <ul className="insights-status">{status.map(row => {
-      const total = stages.reduce((sum, stage) => sum + row[stage.key], 0);
+      const total = stages.reduce((sum, stage) => sum + (row[stage.key] ?? 0), 0);
       return <li key={row.assignment_id}>
         <div className="insights-status-head"><strong>{row.title}</strong><span>{row.class_name} · due {shortDate(row.due_at)}</span></div>
-        <div className="insights-stack" aria-hidden="true">{total ? stages.map(stage => row[stage.key] > 0 && <span key={stage.key} className={'stage-' + stage.key}
+        <div className="insights-stack" aria-hidden="true">{total ? stages.map(stage => (row[stage.key] ?? 0) > 0 && <span key={stage.key} className={'stage-' + stage.key}
           style={{ flexGrow: row[stage.key] }} title={`${stage.label}: ${row[stage.key]}`} />) : <span className="stage-not_submitted" style={{ flexGrow: 1 }} />}</div>
-        <small>{stages.filter(stage => row[stage.key] > 0).map(stage => `${row[stage.key]} ${stage.label.toLowerCase()}`).join(' · ') || 'No students yet'}</small>
+        <small>{stages.filter(stage => (row[stage.key] ?? 0) > 0).map(stage => `${row[stage.key]} ${stage.label.toLowerCase()}`).join(' · ') || 'No students yet'}</small>
       </li>;
     })}</ul>
   </>;

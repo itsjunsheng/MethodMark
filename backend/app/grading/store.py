@@ -45,7 +45,7 @@ class GradingStore(AssignmentStore):
                         "submission_id,status,flagged,error,attempts,version,review_saved_at,"
                         "review_draft,created_at,updated_at,"
                         "submissions!inner(student_code,submitted_at,"
-                        "students(name),assignments!inner(tutor_id,classes(name),papers(title)))"
+                        "students(name),assignments!inner(tutor_id,class_id,classes(name),papers(title)))"
                     ),
                     "submissions.assignments.tutor_id": "eq." + tutor_id,
                     "order": "created_at.desc,submission_id",
@@ -63,12 +63,26 @@ class GradingStore(AssignmentStore):
                     student_name=(submission.get("students") or {}).get("name"),
                     paper_title=assignment["papers"]["title"],
                     class_name=assignment["classes"]["name"],
+                    class_id=assignment["class_id"],
                     submitted_at=submission["submitted_at"],
                 )
             rows.extend(batch)
             if len(batch) < 500:
                 return rows
         raise HTTPException(503, "Too many submissions to load. Please contact your administrator.")
+
+    async def send_class(self, class_id: str, tutor_id: str):
+        classes = await self.request(
+            "GET", "/rest/v1/classes",
+            params={"id": "eq." + class_id, "tutor_id": "eq." + tutor_id, "select": "id"},
+        )
+        if not classes:
+            raise HTTPException(404, "This class is unavailable.")
+        # Atomically queue only unsent work and recheck ownership in the database.
+        return await self.request(
+            "POST", "/rest/v1/rpc/send_class_for_grading",
+            json={"p_class_id": class_id, "p_tutor_id": tutor_id},
+        )
 
     async def edit(self, job, patch, *, tutor_id: str):
         # Recheck ownership before every write; version prevents two tutors/tabs overwriting edits.

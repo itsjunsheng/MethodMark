@@ -1,6 +1,6 @@
 import type { QueueItem } from '../types/grading';
 
-export const gradingLabels = { queued: 'Queued', processing: 'Processing', awaiting_review: 'Awaiting review', failed: 'Processing failed' };
+export const gradingLabels = { submitted: 'Not yet sent for grading', queued: 'Queued', processing: 'Processing', awaiting_review: 'Awaiting review', failed: 'Processing failed' };
 
 // One rule for every screen: AI-marked work needs review until the tutor has checked every part.
 export const needsReview = (item: QueueItem) => item.status === 'awaiting_review' && !item.review_complete;

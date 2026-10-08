@@ -11,8 +11,6 @@
 .hero-kicker{font-size:8px}
 .hero-footnote{font-size:9px;color:#849574}
 .hero-copy .btn{font-size:11px}
-.section-line h2{font-size:13px}
-.section-line>span{font-size:10px}
 .stat-top{font-size:12px;color:#7e8a71}
 .stat-foot{font-size:10px;color:#8a987b}
 .stat-foot.amber{color:#a48a54}
@@ -40,7 +38,7 @@
 .activity p{font-size:10px;color:#8b9c79}
 .activity small{font-size:9px;color:#a0ae8f}
 .activity-footer{font-size:9px}
-.page-footer{font-size:9px}
+
 th{font-size:11px;color:#8c9b7c}
 td{font-size:12px}
 .assignment-name strong{font-size:12px}
@@ -69,6 +67,6 @@ td{font-size:12px}
 @media(max-width:1200px){.stat-top{font-size:10px}.stat-foot{font-size:9px}.hero-kicker{font-size:7px}.hero-copy p{font-size:11px}.review-summary h2{font-size:12px}.review-note>span{font-size:8px}.review-breakdown{font-size:10px}.recent-panel .assignment-name strong{font-size:10px;max-width:180px}.recent-panel .badge{font-size:8px}.recent-panel .assignment-name small{font-size:8px}.panel-heading h2,.performance-panel h2{font-size:13px}.paper-card-bottom>span{font-size:9px}.review-assignment strong{font-size:11px}}
 @media(max-width:1000px){.recent-panel .assignment-name strong{max-width:240px}.hero-copy p{font-size:10px}.hero-kicker{font-size:6px}.hero-copy .btn{font-size:10px}.hero-footnote{font-size:8px}.review-summary h2{font-size:11px}.performance-panel h2{font-size:12px}.performance-panel .panel-heading p{font-size:10px}.page-heading p{font-size:12px}.class-card h3{font-size:14px}}
 @media(max-width:760px){.page-heading p{font-size:11px}.hero-kicker{font-size:6px}.hero-copy p{font-size:10px}.panel-heading h2,.performance-panel h2{font-size:12px}.activity p{font-size:9px}.review-summary h2{font-size:11px}.stat-foot{font-size:8px}.stat-top{font-size:9px}}
-@media(max-width:540px){.hero-copy{max-width:100%;padding:25px 21px}.hero-copy h2{font-size:28px;max-width:290px}.hero-copy p{font-size:10px;max-width:240px}.hero-kicker{font-size:5.5px}.hero-card{min-height:287px}.math-illustration{right:-116px;top:100px;opacity:.45;z-index:0}.stat-top{font-size:11px}.stat-foot{font-size:9px}.hero-footnote{font-size:8px}.hero-copy .btn{font-size:10px}.hero-copy .btn>svg{width:14px}.panel-heading h2,.performance-panel h2,.review-summary h2{font-size:13px}.review-note>span{font-size:10px}.review-breakdown{font-size:12px}.activity strong{font-size:12px}.activity p{font-size:11px}.activity small{font-size:10px}.activity-footer{font-size:9px}.recent-panel .panel-heading p{font-size:9px}.recent-panel .assignment-name strong{max-width:180px;font-size:10px}.recent-panel th{font-size:9px}.recent-panel .badge{font-size:8px}.page-footer{font-size:8px}.class-card h3{font-size:13px}.class-card>p{font-size:10px}.info-banner p{font-size:10px}.info-banner strong{font-size:12px}.paper-card h3{font-size:15px}.paper-card-bottom>span{font-size:10px}.review-row>.badge{font-size:8px}.review-student>span{font-size:9px}}
+@media(max-width:540px){.hero-copy{max-width:100%;padding:25px 21px}.hero-copy h2{font-size:28px;max-width:290px}.hero-copy p{font-size:10px;max-width:240px}.hero-kicker{font-size:5.5px}.hero-card{min-height:287px}.math-illustration{right:-116px;top:100px;opacity:.45;z-index:0}.stat-top{font-size:11px}.stat-foot{font-size:9px}.hero-footnote{font-size:8px}.hero-copy .btn{font-size:10px}.hero-copy .btn>svg{width:14px}.panel-heading h2,.performance-panel h2,.review-summary h2{font-size:13px}.review-note>span{font-size:10px}.review-breakdown{font-size:12px}.activity strong{font-size:12px}.activity p{font-size:11px}.activity small{font-size:10px}.activity-footer{font-size:9px}.recent-panel .panel-heading p{font-size:9px}.recent-panel .assignment-name strong{max-width:180px;font-size:10px}.recent-panel th{font-size:9px}.recent-panel .badge{font-size:8px}.class-card h3{font-size:13px}.class-card>p{font-size:10px}.info-banner p{font-size:10px}.info-banner strong{font-size:12px}.paper-card h3{font-size:15px}.paper-card-bottom>span{font-size:10px}.review-row>.badge{font-size:8px}.review-student>span{font-size:9px}}
 @media(max-width:1000px){.app-shell .main-shell>main{padding-top:18px}}
 @media(max-width:760px){.app-shell .main-shell>main{padding-top:12px}.app-shell .mobile-menu{margin-bottom:4px}}

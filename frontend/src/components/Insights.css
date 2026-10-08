@@ -81,6 +81,7 @@
 .stage-reviewed { background: #2f5847; }
 .stage-awaiting_review { background: #5c876e; }
 .stage-processing { background: #8aad97; }
+.stage-awaiting_grading { background: #c2cba7; }
 .stage-failed { background: var(--viz-critical); }
 .stage-not_submitted { background: #e7e9e3; }
 .insights-status { list-style: none; margin: 0; padding: 0 23px; }

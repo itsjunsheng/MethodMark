@@ -142,16 +142,19 @@ test('a requested count samples unique matching questions without changing the s
 });
 
 for (const width of [1440, 390]) {
-  test(`builder field order and inline optional labels are usable at ${width}px`, async ({ page }) => {
+  test(`builder sections, difficulty choices and footer are usable at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.route(endpoint, route => route.fulfill({ json: questions }));
     await page.goto('/');
     await page.getByRole('button', { name: 'Create practice paper', exact: true }).click();
     await selectPaperScope(page);
     const fields = page.locator('.paper-builder-fields');
-    expect(await fields.locator('select, .topics-select-trigger, input:not([type="checkbox"])').evaluateAll(elements => elements.map(element => element.matches('button') ? 'Topics optional' : element.getAttribute('aria-label') || element.closest('label')!.firstChild!.textContent!.trim()))).toEqual([
-      'Subject', 'School year', 'Subject level', 'Topics optional', 'Number of questions optional', 'Duration (minutes)', 'Paper title optional', 'Difficulty',
+    expect(await fields.locator('select, .topics-select-trigger, input:not([type="checkbox"]):not([type="radio"])').evaluateAll(elements => elements.map(element => element.matches('button') ? 'Topics optional' : element.getAttribute('aria-label') || element.closest('label')!.firstChild!.textContent!.trim()))).toEqual([
+      'Subject', 'School year', 'Subject level', 'Topics optional', 'Paper title optional', 'Number of questions optional', 'Duration (minutes)',
     ]);
+    await expect(page.getByRole('region', { name: 'Question selection' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Paper details' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Difficulty', exact: true }).getByRole('radio', { name: 'Medium' })).toBeChecked();
     const title = page.locator('.paper-builder-details > label').first();
     expect(await title.evaluate(element => {
       const row = element.firstElementChild!;
@@ -159,7 +162,7 @@ for (const width of [1440, 390]) {
       const name = range.getBoundingClientRect(), optional = row.querySelector('.optional')!.getBoundingClientRect();
       return optional.left >= name.right && optional.top < name.bottom;
     })).toBe(true);
-    const row = [page.getByRole('button', { name: /^Topics/ }), page.getByLabel('Number of questions'), page.getByLabel('Duration (minutes)')];
+    const row = [page.getByLabel('Paper title'), page.getByLabel('Number of questions'), page.getByLabel('Duration (minutes)')];
     const boxes = await Promise.all(row.map(control => control.boundingBox()));
     if (width > 700) {
       expect(new Set(boxes.map(box => Math.round(box!.y))).size).toBe(1);
@@ -169,12 +172,12 @@ for (const width of [1440, 390]) {
     }
     const dialog = page.getByRole('dialog');
     expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-    await page.getByRole('button', { name: 'Generate sample paper' }).scrollIntoViewIfNeeded();
     await expect(page.getByRole('button', { name: 'Generate sample paper' })).toBeInViewport();
     await dialog.screenshot({ path: `test-results/paper-builder-${width}.png` });
-    await row[0].click();
+    const topics = page.getByRole('button', { name: /^Topics/ });
+    await topics.click();
     const menu = page.getByRole('group', { name: 'Available topics' });
-    const triggerBox = (await row[0].boundingBox())!;
+    const triggerBox = (await topics.boundingBox())!;
     const menuBox = (await menu.boundingBox())!;
     expect(menuBox.x).toBeCloseTo(triggerBox.x, 0);
     expect(menuBox.width).toBeCloseTo(triggerBox.width, 0);
@@ -233,9 +236,11 @@ test('topics default to checked and support select all, clear all, keyboard and 
   await quadratic.check();
   await page.getByLabel('Duration (minutes)').click();
   await expect(generate).toBeEnabled();
-  const slider = page.getByRole('slider', { name: 'Difficulty', exact: true });
   for (const level of ['easy', 'medium', 'hard'] as const) {
     await selectDifficulty(page, level);
-    await expect(slider).toHaveAttribute('aria-valuetext', level[0].toUpperCase() + level.slice(1));
+    await expect(page.getByRole('radio', { name: level[0].toUpperCase() + level.slice(1), exact: true })).toBeChecked();
   }
+  await page.getByRole('radio', { name: 'Hard', exact: true }).focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.getByRole('radio', { name: 'Medium', exact: true })).toBeChecked();
 });

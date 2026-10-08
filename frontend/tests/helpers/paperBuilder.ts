@@ -7,8 +7,5 @@ export async function selectPaperScope(page: Page, subject = 'Mathematics', year
 }
 
 export async function selectDifficulty(page: Page, level: 'easy' | 'medium' | 'hard') {
-  const slider = page.getByRole('slider', { name: 'Difficulty', exact: true });
-  await slider.focus();
-  await slider.press('Home');
-  for (let step = 0; step < ['easy', 'medium', 'hard'].indexOf(level); step++) await slider.press('ArrowRight');
+  await page.getByRole('radio', { name: level[0].toUpperCase() + level.slice(1), exact: true }).check();
 }

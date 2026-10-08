@@ -1,4 +1,5 @@
 .assignments-panel { margin-top: 24px; overflow: hidden; }
+.dashboard-bottom > .assignments-panel { margin-top: 0; }
 .assignments-heading { padding: 24px; display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .assignments-heading h2 { font-size: 18px; }
 .assignments-heading p { font-size: 13px; color: #7d8878; margin-top: 5px; }
@@ -15,6 +16,14 @@
 .assignment-title { background: none; border: 0; text-align: left; padding: 0; display: flex; align-items: center; gap: 12px; color: #355c48; font-size: 14px; font-weight: 600; }
 .assignment-status { display: inline-block; padding: 6px 10px; border-radius: 5px; background: #edf3ed; color: #4a704d; white-space: nowrap; font-size: 12px; }
 .assignment-status.ready { background: #faf0dc; color: #896928; }
+.assignment-delete { color: #a24636; }
+.assignment-delete:hover { background: #fbefed; }
+.assignment-delete-dialog { max-width: 490px; }
+.assignment-delete-dialog p { font-size: 14px; line-height: 1.8; color: #75816f; }
+.assignment-delete-dialog strong { color: #394b3e; overflow-wrap: anywhere; }
+.assignment-delete-dialog p + p { margin-top: 12px; }
+.assignment-delete-dialog .confirm-danger { background: #a24636; border-color: #a24636; color: white; }
+.assignment-delete-dialog .confirm-danger:hover:not(:disabled) { background: #87392c; }
 .assignment-publish fieldset { display: flex; flex-direction: column; gap: 20px; }
 .assignment-class-select { position: relative; display: grid; gap: 8px; min-width: 0; }
 .assignment-class-label { font-size: 13px; font-weight: 600; color: #364139; }

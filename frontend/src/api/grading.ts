@@ -15,6 +15,8 @@ async function request<T>(path = '', options: RequestInit = {}): Promise<T> {
   return body as T;
 }
 export const listGrading = (signal: AbortSignal) => request<QueueItem[]>('', { signal });
+export const sendClassForGrading = (classId: string) =>
+  request<{ queued: number }>('/classes/' + classId + '/send', { method: 'POST' });
 export async function getGrading(id: string, signal: AbortSignal): Promise<GradingDetail> {
   const data = await request<Omit<GradingDetail, 'paper'> & { paper: PaperRow }>('/' + id, { signal });
   return { ...data, paper: toPaper(data.paper) };

@@ -8,6 +8,7 @@ export async function mockClasses(page: Page) {
     classes: [] as ClassRow[], students: [] as Student[],
     failColour: false, failLoad: false, failRename: false, loseAddResponse: false, failRemove: false, failDeleteClass: false,
     deletedClasses: [] as string[],
+    onClassDeleted: (_classId: string) => {},
     removals: [] as { classId: string | undefined; id: string | undefined }[],
     additions: [] as string[][],
   };
@@ -41,6 +42,7 @@ export async function mockClasses(page: Page) {
         state.deletedClasses.push(id!);
         state.classes = state.classes.filter(item => item.id !== id);
         state.students = state.students.filter(row => row.class_id !== id);
+        state.onClassDeleted(id!);
         return route.fulfill({ json: { id } });
       }
       if (method === 'POST') {

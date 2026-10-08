@@ -4,7 +4,7 @@ import { setupAssignmentSchool } from './helpers/assignments';
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60000).toISOString();
 const item = (id: string, status: string, extra = {}) => ({ submission_id: id, status, flagged: false, error: null, student_code: 'blue-otter',
-  student_name: 'Aisha', class_name: 'Saturday maths', paper_title: 'Algebra checkpoint', submitted_at: minutesAgo(30),
+  student_name: 'Aisha', class_id: '40000000-0000-4000-8000-000000000001', class_name: 'Saturday maths', paper_title: 'Algebra checkpoint', submitted_at: minutesAgo(30),
   updated_at: minutesAgo(5), review_saved_at: null, version: 2, ...extra });
 
 test('the bell shows unread work, links to it and remembers what was read', async ({ page }) => {
@@ -42,6 +42,16 @@ test('the bell shows unread work, links to it and remembers what was read', asyn
   await expect(page.getByRole('dialog', { name: 'Notifications' }).getByText('You’re up to date.')).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: /Ratio checkpoint is ready for grading/ }).click();
   await expect(page.getByRole('heading', { name: 'Assignments', exact: true })).toBeVisible();
+});
+
+test('unsent work is ready to send rather than being processed', async ({ page }) => {
+  await mockAuth(page, true);
+  await page.route('**/api/v1/grading', route => route.fulfill({ json: [item('new', 'submitted')] }));
+  await page.goto('/');
+  await page.locator('.sidebar').getByRole('button', { name: 'Notifications, 1 unread' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Notifications' });
+  await expect(dialog).toContainText('Ready to send for grading / Saturday maths');
+  await expect(dialog).not.toContainText('AI marking in progress');
 });
 
 test('an empty workspace has no unread dot and explains what will appear', async ({ page }) => {

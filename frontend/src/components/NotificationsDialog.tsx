@@ -3,7 +3,7 @@ import type { Notice } from '../lib/useNotifications';
 import { Modal } from './Modal';
 import './Notifications.css';
 
-const icons = { review: ClipboardCheck, flagged: AlertTriangle, failed: CircleAlert, processing: Clock3, deadline: CalendarClock };
+const icons = { submitted: ClipboardCheck, review: ClipboardCheck, flagged: AlertTriangle, failed: CircleAlert, processing: Clock3, deadline: CalendarClock };
 
 function relative(value: string, now = Date.now()) {
   const minutes = Math.round((now - Date.parse(value)) / 60000);

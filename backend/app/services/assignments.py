@@ -66,6 +66,17 @@ class AssignmentStore:
         except (httpx.RequestError, ValueError):
             raise HTTPException(502, "Assignment storage is unavailable. Try again.") from None
 
+    async def delete_assignment(self, assignment_id: str, tutor_id: str):
+        # The service client bypasses RLS, so ownership is part of the DELETE itself.
+        # Cascades remove submissions and grading jobs atomically. Missing rows are
+        # a successful no-op, including retries after a lost response or parent deletion.
+        await self.request(
+            "DELETE",
+            "/rest/v1/assignments",
+            params={"id": f"eq.{assignment_id}", "tutor_id": f"eq.{tutor_id}"},
+            headers={"Prefer": "return=minimal"},
+        )
+
     async def assignment(self, token: UUID):
         rows = await self.request(
             "GET",

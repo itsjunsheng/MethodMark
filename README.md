@@ -29,7 +29,7 @@ See [frontend setup](frontend/README.md) for build and browser-check commands.
 
 - **Overview:** assignment, student and review counts, the class average and score trend from checked work, recent assignments, and activity.
 - **Practice papers:** search your saved library; create a paper from the question bank; edit questions and worked solutions; inspect method and accuracy rubrics; approve before publishing.
-- **Assignments:** class/status/search filters, submission progress, shared student links, and assignment details. Published assignments retain a snapshot of their paper and rubric.
+- **Assignments:** class/status/search filters, submission progress, shared student links, and assignment details. Tutors can permanently delete an assignment from the list or detail view, including its submissions and grading records, while keeping the paper and other classes' assignments. Published assignments retain a snapshot of their paper and rubric.
 - **Marking queue:** real submissions with processing states, rubric-based AI proposals, confidence flags, original handwriting/photos, and private tutor review drafts. Result release is outside this phase.
 - **Classes & students:** create real classes in Supabase; add students in batches with colour-animal codes; save optional names; create separate student records for each class; search and copy codes.
 - **Insights:** class and period filters; average, method and answer marks; score trend and spread; topic mastery; common mistakes; submission status; per-student learning gaps; and CSV export. Only parts the tutor has checked in a review are counted.
@@ -90,8 +90,17 @@ photo references and receipt timestamp. Students need only the shared link and
 their class's colour-animal code; the backend strips all answer keys.
 
 After updating, run `uv sync --locked` in `backend/` and restart both services.
-Start the separate grading worker after configuring its API key. New and existing submissions are queued by the migration. The SQL was
+Start the separate grading worker after configuring its API key. New submissions wait in **All submissions**
+until the tutor chooses **Send for grading** for their class. Existing jobs keep their state.
+For an existing grading schema, apply `supabase/migrations/20261008_manual_class_grading.sql`. The SQL was
 validated locally; applying it to your hosted Supabase project is a separate step.
+
+Assignment deletion uses `DELETE /api/v1/assignments/{id}`. The backend verifies the
+tutor's login and includes their ID in the delete query; the database cascades through
+submissions and grading jobs. Restart the backend after updating. The API works with
+the older draft-only delete policy; `supabase/migrations/20261008_delete_assignments.sql`
+(also included in `update.sql`) enables the same operation for direct RLS clients.
+Private uploaded files are not removed from object storage by this database operation.
 
 ### Class management
 

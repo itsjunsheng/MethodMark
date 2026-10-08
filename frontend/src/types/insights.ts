@@ -1,7 +1,7 @@
 export type InsightTrend = { assignment_id: string; title: string; class_id: string; class_name: string; date: string | null;
   average: number | null; reviewed: number; submitted: number };
 export type InsightStatus = { assignment_id: string; title: string; class_name: string; due_at: string | null; students: number;
-  submitted: number; not_submitted: number; processing: number; awaiting_review: number; failed: number; reviewed: number };
+  submitted: number; not_submitted: number; awaiting_grading?: number; processing: number; awaiting_review: number; failed: number; reviewed: number };
 export type InsightTopic = { topic: string; percent: number | null; earned: number; available: number; students: number; below: number };
 export type InsightMistake = { question: string; paper: string; number: number; topics: string[]; code: string; criterion: string;
   missed: number; assessed: number; rate: number; students: string[]; feedback: string[] };

@@ -30,9 +30,16 @@ async def queue(db: Store, tutor: Tutor):
     return await db.queue(tutor)
 
 
+@router.post("/classes/{class_id}/send")
+async def send_class(class_id: UUID, db: Store, tutor: Tutor):
+    return {"queued": await db.send_class(str(class_id), tutor)}
+
+
 @router.get("/{submission_id}")
 async def detail(submission_id: UUID, db: Store, tutor: Tutor):
     job = await db.owned_job(str(submission_id), tutor)
+    if job["status"] == "submitted":
+        raise HTTPException(409, "Send this class for grading before reviewing this submission.")
     if job["status"] in ("queued", "processing"):
         raise HTTPException(409, "This submission is still being processed.")
     submission = job.pop("submissions")

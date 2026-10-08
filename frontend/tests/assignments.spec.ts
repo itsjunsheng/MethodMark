@@ -62,6 +62,117 @@ test('publish to multiple classes, see per-class assignments and missing submiss
   await expect(page.locator('.live-assignment-table tbody tr')).toHaveCount(1);
 });
 
+test('delete an assignment with submitted work, preserve other classes and allow reassignment', async ({ page }) => {
+  const { db, school } = await setupAssignmentSchool(page);
+  await generate(page);
+  await publish(page, true);
+  const removed = db.assignments[0], kept = db.assignments[1];
+  db.submissions.push({
+    id: '60000000-0000-4000-8000-000000000001', assignment_id: removed.id,
+    student_id: school.students[0].id, student_code: school.students[0].student_code,
+    submitted_at: new Date().toISOString(), drawing: {}, attachments: [], students: { name: 'Aisha' },
+  });
+  await page.getByLabel('Filter assignments by class').selectOption(removed.class_id);
+  const remove = page.getByRole('button', { name: 'Delete Weekly algebra from Saturday maths', exact: true });
+  await remove.click();
+  const dialog = page.getByRole('dialog', { name: 'Delete assignment?' });
+  await expect(dialog).toContainText('submitted work and grading records');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(db.assignments).toHaveLength(2);
+  expect(db.submissions).toHaveLength(1);
+  await remove.click();
+  db.failDeleteAssignment = true;
+  await dialog.getByRole('button', { name: 'Delete assignment', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Could not delete this assignment');
+  expect(db.assignments).toHaveLength(2);
+  expect(db.submissions).toHaveLength(1);
+  db.failDeleteAssignment = false;
+  await dialog.getByRole('button', { name: 'Delete assignment', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByLabel('Filter assignments by class')).toHaveValue('');
+  await expect(page.locator('.live-assignment-table tbody tr')).toHaveCount(1);
+  expect(db.assignments.map(a => a.id)).toEqual([kept.id]);
+  expect(db.submissions).toHaveLength(0);
+  expect(db.papers).toHaveLength(1);
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: 'Assignments', exact: true }).click();
+  await expect(page.locator('.live-assignment-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('.live-assignment-table tbody')).toContainText('Sunday maths');
+  await page.goto('/?assignment=' + removed.share_token);
+  await expect(page.getByText('This assignment is unavailable.', { exact: true })).toBeVisible();
+  await page.goto('/');
+  await page.locator('.sidebar').getByRole('button', { name: 'Practice papers', exact: true }).click();
+  await page.getByRole('button').filter({ has: page.getByRole('heading', { name: 'Weekly algebra' }) }).click();
+  await page.getByRole('button', { name: 'Assign to classes', exact: true }).click();
+  await page.getByRole('button', { name: /^Assign to classes/ }).click();
+  const saturday = page.getByRole('checkbox', { name: /Saturday maths/ });
+  await expect(saturday).not.toBeChecked();
+  await saturday.check();
+  await expect(page.getByRole('checkbox', { name: /Sunday maths/ })).toBeDisabled();
+  await page.getByRole('button', { name: 'Publish assignment', exact: true }).click();
+  await expect(page.locator('.live-assignment-table tbody tr')).toHaveCount(2);
+  expect(db.assignments.find(a => a.class_id === removed.class_id)?.share_token).not.toBe(removed.share_token);
+});
+
+test('delete from class assignment details refreshes the overview', async ({ page }) => {
+  const { db } = await setupAssignmentSchool(page);
+  await generate(page);
+  await publish(page);
+  await page.locator('.sidebar').getByRole('button', { name: 'Classes & students', exact: true }).click();
+  await page.getByRole('button', { name: 'Open class Saturday maths', exact: true }).click();
+  await page.getByRole('button', { name: 'Weekly algebra', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete assignment', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Delete assignment?' });
+  await expect(page.getByRole('dialog')).toHaveCount(1);
+  await confirmation.getByRole('button', { name: 'Delete assignment', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Class assignments' })).toContainText('No assignments yet');
+  expect(db.assignments).toHaveLength(0);
+  await page.locator('.sidebar').getByRole('button', { name: 'Overview', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'No assignments yet' })).toBeVisible();
+  await expect(page.locator('.stat-card').filter({ hasText: 'Active assignments' })).toContainText('0');
+});
+
+test('deleting a class removes its assignments and preserves other classes', async ({ page }) => {
+  const { db, school } = await setupAssignmentSchool(page);
+  await generate(page);
+  await publish(page, true);
+  const kept = db.assignments.find(a => a.class_id === school.classes[1].id)!;
+  await page.locator('.sidebar').getByRole('button', { name: 'Classes & students', exact: true }).click();
+  await page.getByRole('button', { name: 'Options for Saturday maths', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete class', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete class', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(db.assignments.map(a => a.id)).toEqual([kept.id]);
+  expect(db.papers).toHaveLength(1);
+  await page.locator('.sidebar').getByRole('button', { name: 'Assignments', exact: true }).click();
+  await expect(page.locator('.live-assignment-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('.live-assignment-table tbody')).toContainText('Sunday maths');
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: 'Assignments', exact: true }).click();
+  await expect(page.locator('.live-assignment-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('.live-assignment-table tbody')).not.toContainText('Saturday maths');
+});
+
+test('stale assignments refresh on return and deleting an already removed assignment succeeds', async ({ page }) => {
+  const { db } = await setupAssignmentSchool(page);
+  await generate(page);
+  await publish(page, true);
+  const removed = db.assignments[0];
+  await page.getByLabel('Filter assignments by class').selectOption(removed.class_id);
+  // Simulate deletion in another browser, then returning to this page.
+  db.assignments = db.assignments.filter(a => a.id !== removed.id);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.getByLabel('Filter assignments by class')).toHaveValue('');
+  await expect(page.locator('.live-assignment-table tbody tr')).toHaveCount(1);
+  await expect(page.locator('.live-assignment-table tbody')).toContainText('Sunday maths');
+  await page.getByRole('button', { name: 'Delete Weekly algebra from Sunday maths', exact: true }).click();
+  db.assignments = [];
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete assignment', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'No assignments yet' })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
 test('student submission updates counts, missing list and tutor work preview', async ({ page }) => {
   const { db } = await setupAssignmentSchool(page);
   await generate(page);

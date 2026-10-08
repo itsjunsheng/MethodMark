@@ -16,7 +16,7 @@ const loadClasses = (signal: AbortSignal) => listClasses(signal, null);
 
 const studentCount = (count: number) => count + (count === 1 ? ' student' : ' students');
 
-export function ClassesPage({ onDeleted }: { onDeleted: () => void }) {
+export function ClassesPage({ onDeleted, onAssignmentDeleted }: { onDeleted: () => void; onAssignmentDeleted: () => void }) {
   const toast = useToast();
   const { data: classes, loading, error, reload, setData: setClasses } = useRemoteData(loadClasses);
   const [activeClass, setActiveClass] = useState<TutorClass | null>(null);
@@ -29,7 +29,7 @@ export function ClassesPage({ onDeleted }: { onDeleted: () => void }) {
   };
 
   if (activeClass) return <ClassRoster key={activeClass.id} item={activeClass}
-    onBack={() => { setActiveClass(null); reload(); }} />;
+    onBack={() => { setActiveClass(null); reload(); }} onAssignmentDeleted={onAssignmentDeleted} />;
 
   return <section className="classes-page" aria-label="Your classes">
     <div className="classes-toolbar">
@@ -46,14 +46,13 @@ export function ClassesPage({ onDeleted }: { onDeleted: () => void }) {
         {!archived && <button className="btn primary" onClick={() => setCreating(true)}><Plus size={16} />Create your first class</button>}
       </div> : <div className="classes-grid">
         {visible.map(item => <ItemCard key={item.id} className="tutor-class-card"
-          title={item.name} colour={item.color} icon={GraduationCap} openLabel={'Open class ' + item.name}
+          title={item.name} subtitle={item.subject} colour={item.color} icon={GraduationCap} openLabel={'Open class ' + item.name}
           kind="class" archived={item.is_archived} onOpen={() => setActiveClass(item)}
           onColour={async colour => updateClass(await updateClassColour(item.id, colour))}
           onArchive={async () => updateClass(await setClassArchived(item.id, !item.is_archived))}
           onDelete={() => setDeleting(item)}>
-          <h3>{item.name}</h3><p>{item.subject}</p>
-          <span className="class-card-bottom"><span>Secondary {item.school_year} / {item.subject_level}</span>
-            <span><Users size={15} />{studentCount(item.students[0]?.count ?? 0)}<ArrowUpRight size={16} /></span></span>
+          <span>Secondary {item.school_year} / {item.subject_level}</span>
+          <span><Users size={15} />{studentCount(item.students[0]?.count ?? 0)}<ArrowUpRight size={16} /></span>
         </ItemCard>)}
       </div>}
     {deleting && <DeleteClassDialog item={deleting} onClose={() => setDeleting(null)} onDeleted={() => {
@@ -64,7 +63,7 @@ export function ClassesPage({ onDeleted }: { onDeleted: () => void }) {
   </section>;
 }
 
-function ClassRoster({ item, onBack }: { item: TutorClass; onBack: () => void }) {
+function ClassRoster({ item, onBack, onAssignmentDeleted }: { item: TutorClass; onBack: () => void; onAssignmentDeleted: () => void }) {
   const load = useCallback((signal: AbortSignal) => listClassStudents(item.id, signal), [item.id]);
   const { data: students, error, loading, reload, setData: setStudents } = useRemoteData(load);
   const [adding, setAdding] = useState(false);
@@ -125,7 +124,7 @@ function ClassRoster({ item, onBack }: { item: TutorClass; onBack: () => void })
           <p className="roster-footnote">Student records and names are separate for each class.</p>
         </>}
     </section>
-    <AssignmentsPanel key={students?.length ?? 0} classId={item.id} />
+    <AssignmentsPanel key={students?.length ?? 0} classId={item.id} onDeleted={onAssignmentDeleted} />
     {adding && <AddStudentsDialog classId={item.id}
       onClose={() => setAdding(false)} onAdded={() => { setAdding(false); toast.success('Students added. Their codes are ready below.'); setQuery(''); reload(); }} />}
     {removing && <RemoveStudentDialog item={item} student={removing} onClose={() => setRemoving(null)} onRemoved={() => {

@@ -165,7 +165,9 @@ def build_insights(assignments, students, submissions, class_id=None, days=None,
         active = [s for s in roster[assignment["class_id"]] if s["is_active"]]
         for student in active:
             learner(student["id"], assignment)
-        counts = dict(submitted=0, processing=0, awaiting_review=0, failed=0, reviewed=0)
+        counts = dict(
+            submitted=0, awaiting_grading=0, processing=0, awaiting_review=0, failed=0, reviewed=0,
+        )
         assignment_tally = [0, 0]
         for submission in work[assignment["id"]]:
             job = job_of(submission)
@@ -244,13 +246,15 @@ def build_insights(assignments, students, submissions, class_id=None, days=None,
             assignment_tally[0] += score[0]
             assignment_tally[1] += score[1]
             complete = part_count > 0 and checked >= part_count
-            state = job.get("status", "queued")
+            state = job.get("status", "submitted")
             if complete:
                 counts["reviewed"] += 1
                 person["reviewed"] += 1
                 result = percent(score)
                 if result is not None:
                     distribution[min(int(result // 20), len(BINS) - 1)] += 1
+            elif state == "submitted":
+                counts["awaiting_grading"] += 1
             elif state in ("queued", "processing"):
                 counts["processing"] += 1
             elif state == "failed":

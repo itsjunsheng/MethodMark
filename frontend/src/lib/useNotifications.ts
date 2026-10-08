@@ -3,13 +3,14 @@ import type { ClassAssignment } from '../types/assignments';
 import type { QueueItem } from '../types/grading';
 import { workspaceKey } from './workspaceStorage';
 
-export type Notice = { id: string; kind: 'review' | 'flagged' | 'failed' | 'processing' | 'deadline'; title: string; detail: string; at: string; target: 'Marking queue' | 'Assignments' };
+export type Notice = { id: string; kind: 'submitted' | 'review' | 'flagged' | 'failed' | 'processing' | 'deadline'; title: string; detail: string; at: string; target: 'Marking queue' | 'Assignments' };
 
 // Built from data the workspace already polls; nothing is stored on the server.
 export function buildNotices(queue: QueueItem[], assignments: ClassAssignment[], now = Date.now()): Notice[] {
   const notices: Notice[] = queue.map(item => {
     const who = item.student_name || item.student_code;
     const at = item.updated_at || item.submitted_at;
+    if (item.status === 'submitted') return { id: 'submitted:' + item.submission_id, kind: 'submitted', title: `${who} submitted ${item.paper_title}`, detail: 'Ready to send for grading / ' + item.class_name, at: item.submitted_at, target: 'Marking queue' };
     if (item.status === 'failed') return { id: 'failed:' + item.submission_id, kind: 'failed', title: `Grading failed for ${who}`, detail: item.error || item.paper_title, at, target: 'Marking queue' };
     if (item.status !== 'awaiting_review') return { id: 'processing:' + item.submission_id, kind: 'processing', title: `${who} submitted ${item.paper_title}`, detail: 'AI marking in progress', at: item.submitted_at, target: 'Marking queue' };
     // The bell announces newly marked work; once the tutor opens a review it stops (the queue tracks the rest).

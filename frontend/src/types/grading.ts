@@ -1,10 +1,10 @@
 import type { Paper } from '../data';
 import type { Submission } from './assignments';
 
-export type GradingStatus = 'queued' | 'processing' | 'awaiting_review' | 'failed';
+export type GradingStatus = 'submitted' | 'queued' | 'processing' | 'awaiting_review' | 'failed';
 export type QueueItem = {
   submission_id: string; status: GradingStatus; flagged: boolean; error: string | null;
-  student_code: string; student_name: string | null; class_name: string; paper_title: string;
+  student_code: string; student_name: string | null; class_id: string; class_name: string; paper_title: string;
   submitted_at: string; review_saved_at: string | null; version: number; updated_at?: string;
   // Every part of the saved review is ticked as checked (set by the server).
   review_complete: boolean;

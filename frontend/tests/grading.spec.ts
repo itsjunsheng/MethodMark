@@ -4,21 +4,31 @@ import bank from './fixtures/questions.json' with { type: 'json' };
 import type { ReviewDraft } from '../src/types/grading';
 
 const id = '90000000-0000-4000-8000-000000000001';
+const classId = '40000000-0000-4000-8000-000000000001';
 const question = bank[0];
 const points = question.marking_rubric.parts[0].marking_points.map((point, index) => ({ ...point,
   awarded: index ? 0 : 1, evidence: index ? '' : '(x - 3)(x + 3) = 0',
   rationale: index ? 'The final answer is unclear.' : 'Correct factorisation.', confidence: .7,
 }));
-const item = { submission_id: id, status: 'awaiting_review', flagged: true, error: null,
+const item = { submission_id: id, status: 'awaiting_review', flagged: true, error: null as string | null, class_id: classId,
   student_code: 'blue-otter', student_name: 'Aisha', class_name: 'Saturday maths', paper_title: 'Algebra practice',
-  submitted_at: '2026-09-30T08:00:00Z', review_saved_at: null, version: 2 };
+  submitted_at: '2026-09-30T08:00:00Z', review_saved_at: null, review_complete: false, version: 2 };
 async function mockGrading(page: Page) {
   await mockAuth(page, true);
-  const state = { items: [structuredClone(item)], saved: null as ReviewDraft | null, failSave: false, version: 2 };
+  const state = { items: [structuredClone(item)], saved: null as ReviewDraft | null, failSave: false, failSend: false, sentClasses: [] as string[], version: 2 };
   const photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+c9l8AAAAASUVORK5CYII=';
   await page.route('**/api/v1/grading**', async route => {
     expect(route.request().headers().authorization).toMatch(/^Bearer /);
     const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/send')) {
+      expect(route.request().method()).toBe('POST');
+      if (state.failSend) return route.fulfill({ status: 502, json: { detail: 'Unable to queue this class. Please try again.' } });
+      const targetClass = path.split('/').at(-2)!;
+      state.sentClasses.push(targetClass);
+      const pending = state.items.filter(row => row.class_id === targetClass && row.status === 'submitted');
+      pending.forEach(row => { row.status = 'queued'; });
+      return route.fulfill({ json: { queued: pending.length } });
+    }
     if (path.endsWith('/review')) {
       if (state.failSave) return route.fulfill({ status: 409, json: { detail: 'This assessment changed. Reopen it before saving.' } });
       const payload = route.request().postDataJSON();
@@ -92,14 +102,17 @@ test('review original ink and photos and persist a private rubric draft', async 
   await expect(page.getByLabel('Feedback for main')).toHaveValue('Recheck both roots.');
   await expect(page.getByLabel('I have checked this part.')).toBeChecked();
 });
-test('failed grading can be retried and processing has its own filter', async ({ page }) => {
-  const state = await mockGrading(page); state.items[0].status = 'failed'; await openQueue(page);
-  await page.getByRole('button', { name: /Processing failed/ }).click();
+test('failed grading appears on the right of its student row and can be retried', async ({ page }) => {
+  const state = await mockGrading(page); state.items[0].status = 'failed';
+  state.items[0].error = 'The submitted photo could not be processed.';
+  await openQueue(page);
+  await expect(page.locator('.grading-row-result')).toContainText(state.items[0].error);
+  await expect(page.locator('.grading-tabs').getByRole('button', { name: /Processing/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Review manually' })).toBeVisible();
   await page.getByRole('button', { name: 'Retry grading' }).click();
   await expect(page.getByRole('status')).toContainText('Submission queued');
-  await page.getByRole('button', { name: /^Processing [0-9]/ }).click();
   await expect(page.locator('.grading-list')).toContainText('Queued');
+  await expect(page.locator('.grading-error')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Review', exact: true })).toHaveCount(0);
 });
 test('conflicted save keeps edits and displays a toast', async ({ page }) => {
@@ -111,6 +124,87 @@ test('conflicted save keeps edits and displays a toast', async ({ page }) => {
   await expect(page.getByLabel('Feedback for main')).toHaveValue('Keep this edit.');
   expect(state.saved).toBeNull();
 });
+test('all submissions opens first and each class sends only its new work', async ({ page }) => {
+  const state = await mockGrading(page);
+  state.items[0].status = 'submitted';
+  const otherClass = '40000000-0000-4000-8000-000000000002';
+  state.items.push(
+    { ...item, submission_id: '2', student_name: 'Ben', status: 'submitted', flagged: false },
+    { ...item, submission_id: '3', student_name: 'Chen', status: 'submitted', class_id: otherClass, class_name: 'Sunday maths' },
+    { ...item, submission_id: '4', student_name: 'Dina', review_complete: true },
+    { ...item, submission_id: '5', student_name: 'Ella', status: 'processing' },
+    { ...item, submission_id: '6', student_name: 'Farah', status: 'failed', error: 'Photo could not be processed.' },
+  );
+  await openQueue(page);
+  await expect(page.locator('.grading-tabs button').first()).toHaveText('All submissions6');
+  await expect(page.locator('.grading-tabs button').first()).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('Ready for your judgement.')).toHaveCount(0);
+  await expect(page.locator('.grading-list li')).toHaveCount(6);
+  const send = page.getByRole('button', { name: 'Send for grading', exact: true });
+  await expect(send).toHaveCount(1);
+  await expect(page.locator('.grading-class-heading')).toHaveCount(0);
+  await expect(page.locator('.grading-list')).toHaveCount(1);
+  const refreshBox = await page.getByRole('button', { name: 'Refresh', exact: true }).boundingBox();
+  const sendBox = await send.boundingBox();
+  expect(sendBox!.y).toBeCloseTo(refreshBox!.y, 0);
+  expect(sendBox!.x).toBeGreaterThan(refreshBox!.x + refreshBox!.width);
+  await send.click();
+  await expect(page.getByRole('status')).toHaveText('Please select a class before sending submissions for grading.');
+  expect(state.sentClasses).toEqual([]);
+  expect(state.items[0].status).toBe('submitted');
+  await page.getByLabel('Filter by class').selectOption(classId);
+  await expect(page.locator('.grading-list li')).toHaveCount(5);
+  await expect(page.getByRole('button', { name: 'All submissions 5', exact: true })).toBeVisible();
+  // Search narrows the display; the class action still sends all of that class's new work.
+  await page.getByLabel('Search marking queue').fill('Aisha');
+  await expect(page.locator('.grading-list li')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Send for grading', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('2 submissions queued for grading.');
+  await expect(page.locator('.grading-list')).toContainText('Queued');
+  await expect(page.getByRole('button', { name: 'Send for grading', exact: true })).toBeDisabled();
+  expect(state.sentClasses).toEqual([classId]);
+  expect(state.items.map(row => row.status)).toEqual(['queued', 'queued', 'submitted', 'awaiting_review', 'processing', 'failed']);
+  await page.getByLabel('Search marking queue').clear();
+  await page.getByLabel('Filter by class').selectOption(otherClass);
+  await expect(page.locator('.grading-list li')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Send for grading', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Send for grading', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('1 submission queued for grading.');
+  expect(state.sentClasses).toEqual([classId, otherClass]);
+  await page.getByLabel('Filter by class').selectOption('');
+  await expect(page.locator('.grading-list li')).toHaveCount(6);
+  await page.screenshot({ path: 'test-results/marking-queue-classes-desktop.png', fullPage: true });
+});
+
+test('class send failures keep work unsent and allow another attempt', async ({ page }) => {
+  const state = await mockGrading(page);
+  state.items[0].status = 'submitted'; state.failSend = true;
+  await openQueue(page);
+  await page.getByLabel('Filter by class').selectOption(classId);
+  await page.getByRole('button', { name: 'Send for grading', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Unable to queue this class. Please try again.');
+  await expect(page.locator('.grading-list')).toContainText('Not yet sent for grading');
+  await expect(page.getByRole('button', { name: 'Send for grading', exact: true })).toBeEnabled();
+  state.failSend = false;
+  await page.getByRole('button', { name: 'Send for grading', exact: true }).click();
+  await expect(page.locator('.grading-list')).toContainText('Queued');
+});
+
+for (const width of [390, 768]) test('class queue is usable at ' + width + 'px', async ({ page }) => {
+  await page.setViewportSize({ width, height: 900 });
+  const state = await mockGrading(page);
+  state.items[0].status = 'submitted';
+  await openQueue(page);
+  await page.getByRole('button', { name: 'Send for grading', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Please select a class before sending submissions for grading.');
+  expect(state.sentClasses).toEqual([]);
+  await page.getByLabel('Filter by class').selectOption(classId);
+  await page.getByRole('button', { name: 'Send for grading', exact: true }).click();
+  await expect(page.locator('.grading-list')).toContainText('Queued');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  await page.screenshot({ path: `test-results/marking-queue-classes-${width}.png`, fullPage: true });
+});
+
 for (const width of [390, 768]) test('review is usable at ' + width + 'px', async ({ page }) => {
   await page.setViewportSize({ width, height: 900 }); await mockGrading(page); await openQueue(page);
   await page.getByRole('button', { name: 'Review', exact: true }).click();
@@ -136,6 +230,7 @@ test('every screen agrees on what still needs review', async ({ page }) => {
   await expect(page.locator('.nav-count')).toHaveText('2');
   for (const [tab, count] of [['Awaiting review', 2], ['Flagged', 1], ['Reviewed', 1], ['All submissions', 3]] as const)
     await expect(page.getByRole('button', { name: `${tab} ${count}`, exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Awaiting review 2', exact: true }).click();
   const list = page.locator('.grading-list');
   await expect(list.locator('li', { hasText: 'Aisha' })).toContainText('Awaiting review');
   await expect(list.locator('li', { hasText: 'Ben' })).toContainText('Review in progress');

@@ -1,6 +1,6 @@
 import { useToast } from './Toast';
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowUpRight, Copy, FileText, RefreshCw } from 'lucide-react';
+import { ArrowUpRight, Copy, FileText, RefreshCw, Trash2 } from 'lucide-react';
 import { getAttachmentUrls, getPaper, getSubmission, listAssignments, listSubmissions } from '../api/assignments';
 import { listClassStudents } from '../api/classes';
 import type { ClassAssignment, SubmissionSummary } from '../types/assignments';
@@ -8,6 +8,7 @@ import { assignmentLink, assignmentStatus, singaporeDate } from '../lib/assignme
 import { useRemoteData } from '../lib/useRemoteData';
 import { ExamPaper } from './ExamPaper';
 import { Modal } from './Modal';
+import { DeleteAssignmentDialog } from './DeleteAssignmentDialog';
 import './Assignments.css';
 
 function useNow() {
@@ -16,20 +17,31 @@ function useNow() {
   return now;
 }
 
-export function AssignmentsPanel({ classId, compact = false }: { classId?: string; compact?: boolean }) {
+export function AssignmentsPanel({ classId, compact = false, onDeleted }: { classId?: string; compact?: boolean; onDeleted?: () => void }) {
   const load = useCallback((signal: AbortSignal) => listAssignments(signal, classId), [classId]);
-  const { data, loading, error, reload } = useRemoteData(load);
+  const { data, loading, error, reload, setData } = useRemoteData(load);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<ClassAssignment | null>(null);
   const [filter, setFilter] = useState('All assignments');
   const [query, setQuery] = useState('');
   const [classFilter, setClassFilter] = useState('');
   const now = useNow();
   useEffect(() => {
     const timer = setInterval(() => { if (!document.hidden) reload(); }, 30000);
-    return () => clearInterval(timer);
+    const refreshWhenVisible = () => { if (!document.hidden) reload(); };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    window.addEventListener('focus', refreshWhenVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+      window.removeEventListener('focus', refreshWhenVisible);
+    };
   }, [reload]);
   const selected = data?.find(item => item.id === selectedId);
   const classes = [...new Map((data ?? []).map(item => [item.class_id, item.class_name])).entries()];
+  useEffect(() => {
+    if (data && classFilter && !data.some(item => item.class_id === classFilter)) setClassFilter('');
+  }, [data, classFilter]);
   const visible = (data ?? []).filter(item => (!classFilter || item.class_id === classFilter)
     && (filter === 'All assignments' || assignmentStatus(item, now) === filter)
     && (item.title + ' ' + item.class_name).toLowerCase().includes(query.trim().toLowerCase()));
@@ -52,15 +64,24 @@ export function AssignmentsPanel({ classId, compact = false }: { classId?: strin
       : !data && loading ? <p className="assignment-empty" role="status">Loading assignments...</p>
         : !visible.length ? <div className="assignment-empty"><FileText size={28} /><h3>{data?.length ? 'No matching assignments' : 'No assignments yet'}</h3>
           <p>{data?.length ? 'Try another search or filter.' : 'Review a practice paper and publish it to a class to get started.'}</p></div>
-          : <div className="table-scroll"><table className="live-assignment-table"><thead><tr><th>Practice paper</th>{!classId && <th>Class</th>}<th>Submissions</th><th>Due date</th><th>Status</th></tr></thead>
+          : <div className="table-scroll"><table className="live-assignment-table"><thead><tr><th>Practice paper</th>{!classId && <th>Class</th>}<th>Submissions</th><th>Due date</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>{(compact ? visible.slice(0, 4) : visible).map(item => <tr key={item.id}>
               <td><button className="assignment-title" onClick={() => setSelectedId(item.id)}>{item.title}<ArrowUpRight size={15} /></button>
                 <small>{item.question_count} questions / {item.duration_minutes} minutes</small></td>
               {!classId && <td>{item.class_name}</td>}
               <td>{item.submitted_count} / {item.student_count}<small>{Math.max(0, item.student_count - item.submitted_count)} not submitted</small></td>
               <td>{singaporeDate(item.due_at)}</td><td><Status assignment={item} now={now} /></td>
+              <td><button className="icon-btn assignment-delete" title="Delete assignment"
+                aria-label={'Delete ' + item.title + ' from ' + item.class_name} onClick={() => setDeleting(item)}><Trash2 size={17} /></button></td>
             </tr>)}</tbody></table></div>}
-    {selected && <AssignmentDetail assignment={selected} onClose={() => { setSelectedId(null); reload(); }} />}
+    {selected && <AssignmentDetail assignment={selected} onClose={() => { setSelectedId(null); reload(); }}
+      onDelete={() => { setSelectedId(null); setDeleting(selected); }} />}
+    {deleting && <DeleteAssignmentDialog assignment={deleting} onClose={() => setDeleting(null)} onDeleted={() => {
+      setData(current => current?.filter(item => item.id !== deleting.id) ?? null);
+      setDeleting(null);
+      reload();
+      onDeleted?.();
+    }} />}
   </section>;
 }
 
@@ -69,7 +90,7 @@ function Status({ assignment, now }: { assignment: ClassAssignment; now: number 
   return <span className={'assignment-status ' + (status === 'Ready for grading' ? 'ready' : '')}>{status}</span>;
 }
 
-function AssignmentDetail({ assignment, onClose }: { assignment: ClassAssignment; onClose: () => void }) {
+function AssignmentDetail({ assignment, onClose, onDelete }: { assignment: ClassAssignment; onClose: () => void; onDelete: () => void }) {
   const load = useCallback(async (signal: AbortSignal) => {
     const [students, submissions] = await Promise.all([listClassStudents(assignment.class_id, signal), listSubmissions(assignment.id, signal)]);
     return { students, submissions };
@@ -115,6 +136,7 @@ function AssignmentDetail({ assignment, onClose }: { assignment: ClassAssignment
           {row.submission && <button className="btn secondary" onClick={() => setViewing(row.submission!)}>View work</button>}
         </li>)}</ul>
       </>}
+      <div className="modal-actions"><button className="btn secondary assignment-delete" onClick={onDelete}><Trash2 size={16} />Delete assignment</button></div>
     </div>
   </Modal>;
 }

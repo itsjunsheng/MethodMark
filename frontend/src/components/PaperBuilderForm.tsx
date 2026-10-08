@@ -1,7 +1,7 @@
 import { useToast, useToastError } from './Toast';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ShieldCheck, Sparkles } from 'lucide-react';
+import { BookOpen, CheckCircle2, FileText, Sparkles } from 'lucide-react';
 import type { Paper } from '../data';
 import type { BankQuestion } from '../types/questionBank';
 import { fetchQuestions } from '../api/questions';
@@ -94,12 +94,15 @@ export function PaperBuilderForm({ onClose, onSave }: { onClose: () => void; onS
   };
 
   return <form className="modal-body builder-form" onSubmit={generate} aria-busy={loading || saving}>
+    <div className="builder-content">
     {loading && <p className="builder-hint" role="status">Loading question options...</p>}
     {loadError && <div className="builder-load-error">
       <p>Question options are unavailable.</p>
       <button type="button" className="btn secondary" onClick={() => setAttempt(value => value + 1)}>Try again</button>
     </div>}
     <fieldset className="paper-builder-fields" disabled={loading || saving || !!loadError}>
+      <section className="builder-section" aria-labelledby="builder-selection-heading">
+        <h3 id="builder-selection-heading" className="builder-section-title"><BookOpen size={16} />Question selection</h3>
       <div className="paper-builder-row">
         <label>Subject
           <select value={subject} required onChange={event => {
@@ -126,12 +129,28 @@ export function PaperBuilderForm({ onClose, onSave }: { onClose: () => void; onS
           </select>
         </label>
       </div>
-      <div className="paper-builder-row">
+      <div className="paper-builder-content-options">
         <TopicSelect key={`${subject}:${schoolYear}:${subjectLevel}`} options={availableTopics} selected={topics}
           disabled={!hasSelection || !availableTopics.length} onChange={setSelectedTopics} />
+        <fieldset className="builder-difficulty">
+          <legend>Difficulty</legend>
+          <div className="difficulty-options">{difficulties.map(value => <label key={value}>
+            <input type="radio" name="difficulty" value={value} checked={difficulty === value}
+              onChange={() => setDifficulty(value)} />
+            <span>{value[0].toUpperCase() + value.slice(1)}</span>
+          </label>)}</div>
+        </fieldset>
+      </div>
+      </section>
+      <section className="builder-section" aria-labelledby="builder-details-heading">
+        <h3 id="builder-details-heading" className="builder-section-title"><FileText size={16} />Paper details</h3>
+      <div className="paper-builder-row paper-builder-details">
+        <label><span>Paper title <span className="optional">optional</span></span>
+          <input value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Weekly maths practice" maxLength={100} />
+        </label>
         <label><span>Number of questions <span className="optional">optional</span></span>
           <input type="number" min={1} step={1} value={questionCount} placeholder="All matching questions"
-            aria-describedby="builder-count-help" aria-invalid={!!countError}
+            aria-describedby={countError ? 'builder-count-help' : undefined} aria-invalid={!!countError}
             onChange={event => setQuestionCount(event.target.value)} />
         </label>
         <label>Duration (minutes)
@@ -139,31 +158,23 @@ export function PaperBuilderForm({ onClose, onSave }: { onClose: () => void; onS
             onChange={event => setDuration(event.target.value === '' ? NaN : Number(event.target.value))} />
         </label>
       </div>
-      <p id="builder-count-help" className={countError ? 'validation-text' : 'builder-hint'} role={countError ? 'alert' : undefined}>
-        {countError || 'Leave the count blank to use all matches. A question and its parts count as one.'}
-      </p>
-      <div className="paper-builder-row paper-builder-details">
-        <label><span>Paper title <span className="optional">optional</span></span>
-          <input value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Weekly mathematics practice" maxLength={100} />
-        </label>
-        <label className="builder-difficulty">
-          <span>Difficulty <output>{difficulty[0].toUpperCase() + difficulty.slice(1)}</output></span>
-          <input type="range" min={0} max={2} step={1} value={difficulties.indexOf(difficulty)}
-            aria-label="Difficulty" aria-valuetext={difficulty[0].toUpperCase() + difficulty.slice(1)}
-            onChange={event => setDifficulty(difficulties[Number(event.target.value)])} />
-          <span className="difficulty-scale" aria-hidden="true"><span>Easy</span><span>Medium</span><span>Hard</span></span>
-        </label>
-      </div>
+      {countError && <p id="builder-count-help" className="validation-text" role="alert">{countError}</p>}
+      </section>
     </fieldset>
-    {hasSelection && !loading && !loadError && <p className={`builder-availability ${matches.length ? '' : 'validation-text'}`} role="status">
+    </div>
+    <div className="builder-footer">
+    <div className="builder-readiness">
+      {canGenerate && <CheckCircle2 size={17} aria-hidden="true" />}
+      {hasSelection && !loading && !loadError ? <p className={`builder-availability ${matches.length ? '' : 'validation-text'}`} role="status">
       {matches.length ? `${matches.length} matching ${matches.length === 1 ? 'question' : 'questions'} available`
         : !topics.length && availableTopics.length > 0 ? 'Select at least one topic to generate a paper.'
           : 'No questions match these selections. Try another topic or difficulty.'}
-    </p>}
-    <div className="rubric-note"><ShieldCheck size={18} /><span>Review the questions, worked solutions, and marking rubrics before publishing.</span></div>
+      </p> : !loading && !loadError && <p className="builder-hint">Select a subject, school year and level to get started.</p>}
+    </div>
     <div className="modal-actions">
       <button type="button" className="btn secondary" disabled={saving} onClick={onClose}>Cancel</button>
       <button type="submit" className="btn primary" disabled={!canGenerate}><Sparkles size={16} />{saving ? 'Saving paper...' : 'Generate sample paper'}</button>
+    </div>
     </div>
   </form>;
 }

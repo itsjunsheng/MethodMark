@@ -158,6 +158,14 @@ def test_counts_only_tutor_checked_parts():
     assert result["distribution"][3] == {"label": "60–79%", "count": 1}
 
 
+def test_unsent_work_counts_as_submitted_but_not_processing_or_awaiting_review():
+    result = build_insights([ASSIGNMENT], STUDENTS, [submission("s1", "submitted")], now=NOW)
+    status = result["status"][0]
+    assert status["submitted"] == 1 and status["awaiting_grading"] == 1
+    assert status["processing"] == 0 and status["awaiting_review"] == 0
+    assert result["summary"]["average"] is None
+
+
 def test_topics_mistakes_and_learning_gaps():
     result = build_insights([ASSIGNMENT], STUDENTS, SUBMISSIONS, now=NOW)
     assert [(row["topic"], row["percent"], row["below"]) for row in result["topics"]] == [

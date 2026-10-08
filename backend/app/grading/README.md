@@ -7,7 +7,9 @@ and save tutor review drafts. Result approval, release and student results are n
 
 1. Run the full `supabase/update.sql` in the Supabase SQL Editor for the existing database.
    Use `supabase/setup.sql` only for a fresh application schema. Keep existing Auth users.
-   The update queues existing submissions as well as new ones; it does not seed grades.
+   Submissions without a job appear as **Not yet sent for grading**; existing jobs keep their state.
+   If the grading schema is already installed, the focused migration
+   `supabase/migrations/20261008_manual_class_grading.sql` is sufficient for class-level sending.
 2. Add one provider key to `backend/.env`. The selected provider serves both stages:
 
    ```dotenv
@@ -41,7 +43,11 @@ and save tutor review drafts. Result approval, release and student results are n
    ```
 
 4. Submit handwriting or photos through a published assignment. In **Marking queue**,
-   use **Processing** to see queued/in-progress work. Completed assessments appear under
+   **All submissions** opens first. Select a class in the dropdown, then choose **Send for grading**
+   beside **Refresh** to queue all new submissions in that class, including any hidden by search.
+   With **All classes** selected, the button prompts the tutor to select a class. Repeated sends do not
+   regrade existing jobs. Queued/in-progress work remains visible in each student row.
+   Completed assessments appear under
    **Awaiting review**; inspect original work, transcription, rubric points and feedback.
    Edit marks or feedback and **Save review draft**. Students cannot see these drafts.
    Once every part is ticked **I have checked this part**, the submission moves to **Reviewed**;
@@ -50,15 +56,18 @@ and save tutor review drafts. Result approval, release and student results are n
 
 The worker must remain running separately from Uvicorn. Without it, submissions stay queued.
 Restart it after changing provider settings. Missing keys stop the worker with a configuration
-message; failed API calls put the affected submission under **Processing failed**.
+message; failed API calls show an error on the right of the affected student's row.
 After correcting the issue, choose **Retry grading**, or **Review manually**.
 
 ## Flow and responsibilities
 
-`submission transaction -> grading_jobs -> vision transcription -> rubric assessment -> tutor review`
+`submission transaction -> submitted job -> tutor sends class -> queued job -> vision transcription -> rubric assessment -> tutor review`
 
-- The submission trigger inserts one job in the same transaction as the receipt (UC11).
+- The submission trigger inserts one `submitted` job in the same transaction as the receipt (UC11).
   Retrying an existing submission ID returns the same receipt and creates no extra job.
+- `POST /api/v1/grading/classes/{class_id}/send` checks tutor ownership and calls the
+  service-only `send_class_for_grading` database function. It atomically moves only that
+  tutor's unsent submissions in that class to `queued`; failed jobs retain their row-level retry.
 - `worker.py` claims jobs sequentially, independently of the web request. A ten-minute lease
   is renewed between model calls. Expired leases are reclaimed; three interrupted attempts
   produce a failed job. Explicit retry is required for provider errors, avoiding endless spend.
@@ -113,6 +122,14 @@ uv run ruff check .
 
 Browser coverage: `frontend/tests/grading.spec.ts` checks empty/live queues, retry, editable
 rubric marks, persisted drafts, conflict errors, and tablet/mobile layouts with mocked services.
+`supabase/tests/class_grading.mjs` exercises fresh setup and upgrade in isolated PostgreSQL,
+including class ownership, repeated sends, existing-job preservation and worker claiming.
+With `@electric-sql/pglite` installed in a temporary directory, run it from the repository root:
+
+```sh
+node supabase/tests/class_grading.mjs <temporary-directory>/node_modules/@electric-sql/pglite/dist/index.js
+```
+
 The SQL was exercised with an isolated PostgreSQL engine for fresh setup, upgrade, repeated
 updates, backfill, RLS, atomic enqueue, receipt replay, stale leases and deletion cascades.
 Provider contracts are tested with mocked HTTP responses. No live AI grading was run without

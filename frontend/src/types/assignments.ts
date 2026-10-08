@@ -30,3 +30,12 @@ export type StudentPaperPayload = {
   }[];
 };
 export type StudentAccess = { assignment: StudentAssignment; paper: Paper; student_code: string; submitted_at: string | null };
+type MarkTotal = { earned: number; available: number };
+// Tutor-approved marks and feedback only (UC12); no rubric text, AI evidence or drafts.
+export type ReleasedResult = MarkTotal & { method: MarkTotal; accuracy: MarkTotal; questions: (MarkTotal & {
+  number: number; parts: (MarkTotal & { label: string | null; feedback: string;
+    marks: { code: string; awarded: number; max_marks: number }[] })[] })[] };
+export type StudentResultState =
+  | { status: 'not_submitted' }
+  | { status: 'pending'; submitted_at: string }
+  | { status: 'released'; submitted_at: string; released_at: string; result: ReleasedResult };

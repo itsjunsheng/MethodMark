@@ -101,24 +101,23 @@ def part(part_id, points, checked=True, feedback=""):
     }
 
 
-def submission(student, status, questions=None):
+def submission(student, status, released=None, draft=None):
     return {
         "id": str(uuid4()),
         "assignment_id": ASSIGNMENT["id"],
         "student_id": student,
         "submitted_at": "2026-09-30T00:00:00Z",
-        "grading_jobs": {
-            "status": status,
-            "review_draft": {"questions": questions} if questions else None,
-        },
+        # The draft is never read: only the released review counts.
+        "grading_jobs": {"status": status, "review_draft": draft},
+        "results": {"review": {"questions": released}} if released else None,
     }
 
 
 SUBMISSIONS = [
-    # Fully checked: method kept, answer slipped on the quadratic.
+    # Released: method kept, answer slipped on the quadratic.
     submission(
         "s1",
-        "awaiting_review",
+        "released",
         [
             {
                 "question_id": QUADRATIC,
@@ -127,16 +126,13 @@ SUBMISSIONS = [
             {"question_id": PROBABILITY, "parts": [part("a", {"b1": 1}), part("b", {"b2": 1})]},
         ],
     ),
-    # One checked part; the unchecked probability marks must not count.
+    # Reopened after release: the last released result still counts.
     submission(
         "s2",
         "awaiting_review",
         [
             {"question_id": QUADRATIC, "parts": [part("main", {"m1": 0, "a1": 0})]},
-            {
-                "question_id": PROBABILITY,
-                "parts": [part("a", {"b1": 1}, False), part("b", {"b2": 1}, False)],
-            },
+            {"question_id": PROBABILITY, "parts": [part("a", {"b1": 1}), part("b", {"b2": 0})]},
         ],
     ),
     submission("s3", "queued"),
@@ -144,18 +140,28 @@ SUBMISSIONS = [
 ]
 
 
-def test_counts_only_tutor_checked_parts():
+def test_counts_only_released_results():
     result = build_insights([ASSIGNMENT], STUDENTS, SUBMISSIONS, now=NOW)
     summary = result["summary"]
-    assert summary["average"] == 50.0  # (1 + 0 + 1 + 1 + 0 + 0) / 6
-    assert summary["checked_parts"] == 4 and summary["total_parts"] == 12
+    assert summary["average"] == 50.0  # (1 + 0 + 1 + 1) + (0 + 0 + 1 + 0) out of 8
+    assert summary["checked_parts"] == 6 and summary["total_parts"] == 12
     assert summary["method_rate"] == 50.0 and summary["answer_rate"] == 50.0
     assert summary["slips"] == {"count": 1, "parts": 2, "percent": 50.0}
-    assert summary["students"] == 4 and summary["submissions"] == 4 and summary["reviewed"] == 1
+    assert summary["students"] == 4 and summary["submissions"] == 4 and summary["reviewed"] == 2
     status = result["status"][0]
-    assert (status["submitted"], status["not_submitted"], status["reviewed"]) == (3, 1, 1)
-    assert (status["awaiting_review"], status["processing"], status["failed"]) == (1, 1, 1)
+    assert (status["submitted"], status["not_submitted"], status["reviewed"]) == (3, 1, 2)
+    assert (status["awaiting_review"], status["processing"], status["failed"]) == (0, 1, 1)
+    assert result["distribution"][1] == {"label": "20–39%", "count": 1}
     assert result["distribution"][3] == {"label": "60–79%", "count": 1}
+
+
+def test_checked_drafts_do_not_count_until_released():
+    draft = {"questions": [{"question_id": QUADRATIC, "parts": [part("main", {"m1": 1, "a1": 1})]}]}
+    result = build_insights(
+        [ASSIGNMENT], STUDENTS, [submission("s1", "awaiting_review", draft=draft)], now=NOW
+    )
+    assert result["summary"]["average"] is None and result["summary"]["checked_parts"] == 0
+    assert result["status"][0]["awaiting_review"] == 1 and result["status"][0]["reviewed"] == 0
 
 
 def test_unsent_work_counts_as_submitted_but_not_processing_or_awaiting_review():
@@ -170,7 +176,7 @@ def test_topics_mistakes_and_learning_gaps():
     result = build_insights([ASSIGNMENT], STUDENTS, SUBMISSIONS, now=NOW)
     assert [(row["topic"], row["percent"], row["below"]) for row in result["topics"]] == [
         ("Quadratics", 25.0, 2),
-        ("Probability", 100.0, 0),
+        ("Probability", 75.0, 1),
     ]
     first = result["mistakes"][0]
     assert (first["code"], first["missed"], first["assessed"], first["rate"]) == ("A1", 2, 2, 100.0)

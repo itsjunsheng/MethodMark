@@ -1,5 +1,5 @@
 import type { InkDrawing } from '../lib/useHandwriting';
-import type { StudentAccess, StudentAssignment, StudentPaperPayload } from '../types/assignments';
+import type { StudentAccess, StudentAssignment, StudentPaperPayload, StudentResultState } from '../types/assignments';
 
 async function request<T>(token: string, action = '', options: RequestInit = {}): Promise<T> {
   const response = await fetch('/api/v1/student/assignments/' + encodeURIComponent(token) + action, options);
@@ -24,6 +24,11 @@ export async function openStudentAssignment(token: string, code: string): Promis
       ...question, solution: '', content: question_content, marksByPart: marks_by_part,
     })),
   } };
+}
+export function getStudentResult(token: string, code: string, signal?: AbortSignal) {
+  return request<StudentResultState>(token, '/result', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_code: code }), signal,
+  });
 }
 export function submitStudentAssignment(token: string, code: string, id: string, drawing: InkDrawing, files: File[], drawingSizes: Record<string, [number, number]> = {}) {
   const form = new FormData();

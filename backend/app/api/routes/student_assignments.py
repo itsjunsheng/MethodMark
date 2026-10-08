@@ -1,4 +1,4 @@
-"""Account-free paper access and submissions; tutor-only attachment previews."""
+"""Account-free paper access, submissions and released results; tutor-only attachment previews."""
 
 import json
 import warnings
@@ -16,6 +16,8 @@ from starlette.datastructures import UploadFile
 
 from app.api.dependencies import get_settings, require_tutor
 from app.core.config import Settings
+from app.grading.results import student_result
+from app.grading.schemas import GradingError
 from app.services.assignments import AssignmentStore, metadata, student_paper
 
 router = APIRouter(tags=["Assignments"])
@@ -51,6 +53,38 @@ def limit_access(request: Request):
                 del attempts[old_key]
 
 
+# Codes are short (24 colours x 48 animals), so wrong guesses are capped per link and address.
+WRONG_CODES, WRONG_CODE_WINDOW = 10, 15 * 60
+WRONG_CODE_MESSAGES = {"Check your student code with your tutor."}
+
+
+def wrong_codes(request: Request, token: UUID):
+    failures = getattr(request.app.state, "wrong_codes", None)
+    if failures is None:
+        failures = request.app.state.wrong_codes = defaultdict(deque)
+    key = (request.client.host if request.client else "unknown", str(token))
+    queue = failures[key]
+    while queue and queue[0] < monotonic() - WRONG_CODE_WINDOW:
+        queue.popleft()
+    return queue
+
+
+def check_code_attempts(request: Request, token: UUID):
+    if len(wrong_codes(request, token)) >= WRONG_CODES:
+        raise HTTPException(
+            429,
+            "Too many incorrect student codes. Please wait 15 minutes or ask your tutor.",
+            headers={"Retry-After": str(WRONG_CODE_WINDOW)},
+        )
+
+
+def note_wrong_code(request: Request, token: UUID, error: HTTPException):
+    if error.status_code == 403 or (
+        error.status_code == 409 and error.detail in WRONG_CODE_MESSAGES
+    ):
+        wrong_codes(request, token).append(monotonic())
+
+
 async def store(settings: Annotated[Settings, Depends(get_settings)]):
     async with httpx.AsyncClient(timeout=30) as client:
         yield AssignmentStore(settings, client)
@@ -65,10 +99,21 @@ async def get_assignment(token: UUID, db: Store, limited: Public):
     return metadata(await db.assignment(token))
 
 
-@router.post("/student/assignments/{token}/open")
-async def open_assignment(token: UUID, payload: StudentCode, db: Store, limited: Public):
+async def verified_member(request: Request, token: UUID, code: str, db: AssignmentStore):
+    check_code_attempts(request, token)
     assignment = await db.assignment(token)
-    member = await db.member(assignment, payload.student_code)
+    try:
+        return assignment, await db.member(assignment, code)
+    except HTTPException as error:
+        note_wrong_code(request, token, error)
+        raise
+
+
+@router.post("/student/assignments/{token}/open")
+async def open_assignment(
+    token: UUID, payload: StudentCode, request: Request, db: Store, limited: Public
+):
+    assignment, member = await verified_member(request, token, payload.student_code, db)
     receipt = await db.receipt(assignment["id"], member["id"])
     try:
         paper = student_paper(assignment["papers"])
@@ -86,6 +131,7 @@ async def open_assignment(token: UUID, payload: StudentCode, db: Store, limited:
 
 @router.post("/student/assignments/{token}/submit")
 async def submit_assignment(token: UUID, request: Request, db: Store, limited: Public):
+    check_code_attempts(request, token)
     try:
         size = int(request.headers.get("content-length", "0"))
     except ValueError:
@@ -129,7 +175,35 @@ async def submit_assignment(token: UUID, request: Request, db: Store, limited: P
                     422, "Choose readable JPG or PNG photos up to 25 megapixels."
                 ) from None
             files.append(((upload.filename or "Solution")[:200], mime, content))
-        return await db.submit(token, code, submission_id, drawing, files, drawing_sizes)
+        try:
+            return await db.submit(token, code, submission_id, drawing, files, drawing_sizes)
+        except HTTPException as error:
+            note_wrong_code(request, token, error)
+            raise
+
+
+@router.post("/student/assignments/{token}/result")
+async def get_result(
+    token: UUID, payload: StudentCode, request: Request, db: Store, limited: Public
+):
+    # UC12: the same link and code as the paper; only this student's released result is returned.
+    assignment, member = await verified_member(request, token, payload.student_code, db)
+    receipt = await db.receipt(assignment["id"], member["id"])
+    if not receipt:
+        return {"status": "not_submitted"}
+    released = await db.released_result(receipt["id"])
+    if not released:
+        return {"status": "pending", "submitted_at": receipt["submitted_at"]}
+    try:
+        result = student_result(released["review"], assignment["papers"])
+    except (GradingError, KeyError, TypeError, ValueError):
+        raise HTTPException(502, "Your result could not be loaded. Please try again.") from None
+    return {
+        "status": "released",
+        "submitted_at": receipt["submitted_at"],
+        "released_at": released["released_at"],
+        "result": result,
+    }
 
 
 @router.get("/submissions/{submission_id}/attachments")

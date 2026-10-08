@@ -30,3 +30,30 @@
 @media print {
   .handwriting-area { outline: none !important; }
 }
+
+/* Released result (UC12), shown inside the submitted panel. */
+.student-result { display: grid; gap: 14px; justify-items: center; margin-top: 28px; padding-top: 24px; border-top: 1px solid #e3ead9; font-size: 13px; line-height: 1.7; color: #5e7550; }
+.student-result h2 { font-size: 17px; color: #4d6642; }
+.student-result.released { justify-items: stretch; text-align: left; }
+.student-result.released > h2 { text-align: center; }
+.student-result-score { display: flex; align-items: baseline; justify-content: center; gap: 12px; }
+.student-result-score strong { font-family: 'Manrope', sans-serif; font-size: 34px; letter-spacing: -1px; color: #315c4b; font-variant-numeric: tabular-nums; }
+.student-result-score span { font-size: 14px; color: #6f8a63; font-variant-numeric: tabular-nums; }
+.student-result-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }
+.student-result-split > div { padding: 10px 12px; border: 1px solid #e3ead9; border-radius: 8px; background: #f7faf3; }
+.student-result-split dt { font-size: 11px; color: #809075; }
+.student-result-split dd { margin: 2px 0 0; font-weight: 700; color: #315c4b; font-variant-numeric: tabular-nums; }
+.student-result-questions { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.student-result-questions > li { padding: 12px 14px; border: 1px solid #e3ead9; border-radius: 8px; background: #fff; }
+.student-result-questions h3 { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: #4d6642; font-variant-numeric: tabular-nums; }
+.student-result-part { display: grid; gap: 6px; margin-top: 8px; }
+.student-result-part h4 { margin: 0; font-size: 12px; color: #6f8a63; }
+.student-result-part p { min-width: 0; overflow-wrap: anywhere; color: #5e7550; }
+.student-result-marks { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.student-result-marks li { padding: 2px 8px; border-radius: 5px; background: #f6efe2; color: #85570a; font-size: 12px; font-variant-numeric: tabular-nums; }
+.student-result-marks li.full { background: #e7f0e3; color: #315c4b; }
+.student-result .btn { justify-self: center; }
+@media (max-width: 540px) {
+  .student-result-split { grid-template-columns: 1fr; }
+  .student-result-score strong { font-size: 30px; }
+}

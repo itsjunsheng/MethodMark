@@ -1,4 +1,4 @@
-"""Performance analytics from tutor-checked review drafts. AI proposals are never counted."""
+"""Performance analytics from tutor-approved, released results (UC8 rule 3). Drafts never count."""
 
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
@@ -52,7 +52,7 @@ class InsightsStore(AssignmentStore):
                 "assignments.tutor_id": "eq." + tutor_id,
                 "select": (
                     "id,assignment_id,student_id,submitted_at,assignments!inner(tutor_id),"
-                    "grading_jobs(status,review_draft)"
+                    "grading_jobs(status),results(review)"
                 ),
                 "order": "id",
             },
@@ -99,9 +99,18 @@ def kind(code: str) -> str:
     return "method" if code.strip().upper().startswith("M") else "answer"
 
 
+def one(submission: dict, relation: str) -> dict:
+    row = submission.get(relation) or {}
+    return (row[0] if row else {}) if isinstance(row, list) else row
+
+
 def job_of(submission: dict) -> dict:
-    job = submission.get("grading_jobs") or {}
-    return (job[0] if job else {}) if isinstance(job, list) else job
+    return one(submission, "grading_jobs")
+
+
+def released_review(submission: dict) -> dict:
+    # A reopened result still counts as last released until the tutor releases it again.
+    return one(submission, "results").get("review") or {}
 
 
 def build_insights(assignments, students, submissions, class_id=None, days=None, now=None):
@@ -177,14 +186,14 @@ def build_insights(assignments, students, submissions, class_id=None, days=None,
                 counts["submitted"] += 1
             total_parts += part_count
             score, checked = [0, 0], 0
-            for reviewed_question in (job.get("review_draft") or {}).get("questions", []):
+            for reviewed_question in released_review(submission).get("questions", []):
                 found = paper.get(reviewed_question.get("question_id"))
                 if not found:
                     continue
                 number, bank, points = found
                 for part in reviewed_question.get("parts", []):
                     if not part.get("checked"):
-                        continue  # Only parts the tutor has confirmed count.
+                        continue  # Released reviews are fully checked; guard older rows anyway.
                     checked += 1
                     part_marks = {"method": [0, 0], "answer": [0, 0]}
                     for decision in part.get("points", []):

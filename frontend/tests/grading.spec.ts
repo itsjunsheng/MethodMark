@@ -12,10 +12,11 @@ const points = question.marking_rubric.parts[0].marking_points.map((point, index
 }));
 const item = { submission_id: id, status: 'awaiting_review', flagged: true, error: null as string | null, class_id: classId,
   student_code: 'blue-otter', student_name: 'Aisha', class_name: 'Saturday maths', paper_title: 'Algebra practice',
-  submitted_at: '2026-09-30T08:00:00Z', review_saved_at: null, review_complete: false, version: 2 };
+  submitted_at: '2026-09-30T08:00:00Z', review_saved_at: null, review_complete: false, version: 2, released_at: null as string | null };
 async function mockGrading(page: Page) {
   await mockAuth(page, true);
-  const state = { items: [structuredClone(item)], saved: null as ReviewDraft | null, failSave: false, failSend: false, sentClasses: [] as string[], version: 2 };
+  const state = { items: [structuredClone(item)], saved: null as ReviewDraft | null, failSave: false, failSend: false, sentClasses: [] as string[], version: 2,
+    status: 'awaiting_review', released: null as ReviewDraft | null, releasedAt: null as string | null, failRelease: false, reopened: 0 };
   const photo = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+c9l8AAAAASUVORK5CYII=';
   await page.route('**/api/v1/grading**', async route => {
     expect(route.request().headers().authorization).toMatch(/^Bearer /);
@@ -36,12 +37,26 @@ async function mockGrading(page: Page) {
       state.saved = payload.draft; state.version++;
       return route.fulfill({ json: { version: state.version, review_saved_at: '2026-10-01T00:00:00Z' } });
     }
+    if (path.endsWith('/release')) {
+      if (state.failRelease) return route.fulfill({ status: 409, json: { detail: 'This assessment changed. Reopen it before releasing.' } });
+      const payload = route.request().postDataJSON();
+      expect(payload.version).toBe(state.version);
+      state.saved = state.released = payload.draft; state.version++; state.status = 'released';
+      state.releasedAt = '2026-10-09T02:00:00Z';
+      Object.assign(state.items[0], { status: 'released', released_at: state.releasedAt, review_complete: true });
+      return route.fulfill({ json: { version: state.version, released_at: state.releasedAt } });
+    }
+    if (path.endsWith('/reopen')) {
+      expect(route.request().postDataJSON().version).toBe(state.version);
+      state.version++; state.status = 'awaiting_review'; state.reopened++; state.items[0].status = 'awaiting_review';
+      return route.fulfill({ json: { version: state.version } });
+    }
     if (path.endsWith('/retry')) {
       state.items[0].status = 'queued'; state.items[0].error = null;
       return route.fulfill({ json: { status: 'queued' } });
     }
     if (path.endsWith(id)) return route.fulfill({ json: {
-      job: { submission_id: id, status: 'awaiting_review', version: state.version, review_draft: state.saved,
+      job: { submission_id: id, status: state.status, version: state.version, review_draft: state.saved,
         vision_model: 'test-model', result: { prompt_version: 'rubric-v1', questions: [{ question_id: question.id, number: 1, parts: [{
           part_id: 'main', label: null, transcription: '(x - 3)(x + 3) = 0', legibility: 'uncertain', confidence: .7,
           flags: ['Handwriting needs checking.'], feedback: 'Check both roots.', points,
@@ -50,7 +65,7 @@ async function mockGrading(page: Page) {
         drawing: { [JSON.stringify([question.id, 'main'])]: [[[.1, .2], [.4, .5], [.7, .2]]] },
         drawing_sizes: { [JSON.stringify([question.id, 'main'])]: [500, 150] },
       },
-      photos: [{ name: 'working.png', url: photo }], class_name: item.class_name, manual_error: null,
+      photos: [{ name: 'working.png', url: photo }], class_name: item.class_name, manual_error: null, released_at: state.releasedAt,
       paper: { id: 'paper', title: item.paper_title, color: 'sage', is_archived: false, subject: 'Mathematics',
         school_year: 3, subject_level: 'G3', duration_minutes: 45, instructions: 'Show your working.', status: 'published',
         questions_snapshot: [{ id: question.id, topic: 'Algebra', text: 'Solve the equation.', method: 1, accuracy: 1,
@@ -71,7 +86,7 @@ test('empty queue has no sample reviews or release controls', async ({ page }) =
   await mockAuth(page, true); await openQueue(page);
   await expect(page.getByRole('heading', { name: 'No submissions yet' })).toBeVisible();
   await expect(page.locator('.grading-list li')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Released|Approve/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Approve/ })).toHaveCount(0);
 });
 test('review original ink and photos and persist a private rubric draft', async ({ page }) => {
   const state = await mockGrading(page); await openQueue(page);
@@ -94,7 +109,10 @@ test('review original ink and photos and persist a private rubric draft', async 
   await expect(dialog.getByRole('status')).toContainText('Review draft saved');
   expect(state.saved!.questions[0].parts[0].points[0].awarded).toBe(0);
   expect(state.saved!.questions[0].parts[0].checked).toBe(true);
-  await expect(dialog.getByRole('button', { name: /Approve|Release/ })).toHaveCount(0);
+  // Saving keeps the review private; nothing is released until the tutor approves it.
+  await expect(dialog.getByRole('button', { name: 'Approve and release' })).toBeEnabled();
+  expect(state.released).toBeNull();
+  await expect(dialog).toContainText('Not released.');
   await dialog.screenshot({ path: 'test-results/grading-review-desktop.png' });
   await page.reload();
   await page.locator('.sidebar').getByRole('button', { name: 'Marking queue', exact: true }).click();
@@ -228,16 +246,67 @@ test('every screen agrees on what still needs review', async ({ page }) => {
   await openQueue(page);
   // A half-finished review still needs work; a finished one does not, wherever it is counted.
   await expect(page.locator('.nav-count')).toHaveText('2');
-  for (const [tab, count] of [['Awaiting review', 2], ['Flagged', 1], ['Reviewed', 1], ['All submissions', 3]] as const)
+  for (const [tab, count] of [['Awaiting review', 2], ['Flagged', 1], ['Ready to release', 1], ['Released', 0], ['All submissions', 3]] as const)
     await expect(page.getByRole('button', { name: `${tab} ${count}`, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Awaiting review 2', exact: true }).click();
   const list = page.locator('.grading-list');
   await expect(list.locator('li', { hasText: 'Aisha' })).toContainText('Awaiting review');
   await expect(list.locator('li', { hasText: 'Ben' })).toContainText('Review in progress');
   await expect(list.locator('li', { hasText: 'Chen' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Reviewed 1', exact: true }).click();
-  await expect(list.locator('li', { hasText: 'Chen' })).toContainText('Reviewed');
+  await page.getByRole('button', { name: 'Ready to release 1', exact: true }).click();
+  await expect(list.locator('li', { hasText: 'Chen' })).toContainText('Ready to release');
   await expect(list.locator('li', { hasText: 'Chen' })).not.toContainText('Needs a closer look');
   await page.locator('.sidebar').getByRole('button', { name: 'Overview', exact: true }).click();
   await expect(page.locator('.stat-card', { hasText: 'Awaiting review' }).locator('.stat-number')).toHaveText('2');
+});
+
+test('approve and release needs a finished review, confirms the totals and locks the result', async ({ page }) => {
+  const state = await mockGrading(page); await openQueue(page);
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  const release = dialog.getByRole('button', { name: 'Approve and release' });
+  await expect(release).toBeDisabled();
+  await dialog.getByLabel('Feedback for main').fill('Recheck both roots.');
+  await dialog.getByLabel('I have checked this part.').check();
+  await release.click();
+  const confirm = dialog.getByRole('group', { name: 'Confirm release' });
+  await expect(confirm).toContainText('to Aisha?');
+  await expect(confirm).toContainText('Method marks');
+  await expect(confirm).toContainText('Aisha will see these marks and your feedback');
+  await dialog.screenshot({ path: 'test-results/grading-release-confirm.png' });
+  await expect(dialog.getByLabel('Feedback for main')).toBeDisabled();
+  await confirm.getByRole('button', { name: 'Cancel' }).click();
+  expect(state.released).toBeNull();
+  await release.click();
+  await dialog.getByRole('button', { name: 'Release result' }).click();
+  await expect(page.getByRole('status')).toContainText('Result released to Aisha.');
+  expect(state.released!.questions[0].parts[0]).toMatchObject({ checked: true, feedback: 'Recheck both roots.' });
+  await expect(dialog.getByRole('button', { name: 'Approve and release' })).toHaveCount(0);
+  await expect(dialog.getByLabel('Feedback for main')).toBeDisabled();
+  await expect(dialog).toContainText('Aisha can see these marks and feedback.');
+  await dialog.getByRole('button', { name: 'Close dialog' }).click();
+  await expect(page.getByRole('button', { name: 'Released 1', exact: true })).toBeVisible();
+  await expect(page.locator('.grading-list li')).toContainText('Released');
+  await expect(page.locator('.nav-count')).toHaveCount(0);
+  // Reopening lets the tutor correct the result; the student keeps the last release meanwhile.
+  await page.getByRole('button', { name: 'View result', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Reopen to make changes' }).click();
+  await expect(page.getByRole('status')).toContainText('Aisha still sees the released result');
+  expect(state.reopened).toBe(1);
+  await expect(dialog.getByLabel('Feedback for main')).toBeEnabled();
+  await expect(dialog).toContainText('Reopened. Aisha still sees the result released');
+  await expect(dialog.getByRole('button', { name: 'Approve and release' })).toBeEnabled();
+});
+test('a failed release keeps the result private and the edits in place', async ({ page }) => {
+  const state = await mockGrading(page); state.failRelease = true; await openQueue(page);
+  await page.getByRole('button', { name: 'Review', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Feedback for main').fill('Keep this feedback.');
+  await dialog.getByLabel('I have checked this part.').check();
+  await dialog.getByRole('button', { name: 'Approve and release' }).click();
+  await dialog.getByRole('button', { name: 'Release result' }).click();
+  await expect(page.getByRole('alert')).toContainText('Reopen it before releasing.');
+  await expect(dialog.getByLabel('Feedback for main')).toHaveValue('Keep this feedback.');
+  await expect(dialog).toContainText('Not released.');
+  expect(state.released).toBeNull();
 });

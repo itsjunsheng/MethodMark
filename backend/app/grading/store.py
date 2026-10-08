@@ -16,6 +16,14 @@ class LeaseLost(Exception):
     pass
 
 
+def released_at(submission: dict):
+    # results is one-to-one with submissions; PostgREST may return an object or a list.
+    released = submission.get("results")
+    if isinstance(released, list):
+        released = released[0] if released else None
+    return (released or {}).get("released_at")
+
+
 class GradingStore(AssignmentStore):
     async def owned_job(self, submission_id: str, tutor_id: str):
         rows = await self.request(
@@ -25,7 +33,7 @@ class GradingStore(AssignmentStore):
                 "submission_id": "eq." + submission_id,
                 "submissions.assignments.tutor_id": "eq." + tutor_id,
                 "select": (
-                    "*,submissions!inner(*,students(name),"
+                    "*,submissions!inner(*,students(name),results(released_at),"
                     "assignments!inner(tutor_id,paper_id,classes(name),papers(*)))"
                 ),
             },
@@ -44,8 +52,8 @@ class GradingStore(AssignmentStore):
                     "select": (
                         "submission_id,status,flagged,error,attempts,version,review_saved_at,"
                         "review_draft,created_at,updated_at,"
-                        "submissions!inner(student_code,submitted_at,"
-                        "students(name),assignments!inner(tutor_id,class_id,classes(name),papers(title)))"
+                        "submissions!inner(student_code,submitted_at,students(name),results(released_at),"
+                        "assignments!inner(tutor_id,class_id,classes(name),papers(title)))"
                     ),
                     "submissions.assignments.tutor_id": "eq." + tutor_id,
                     "order": "created_at.desc,submission_id",
@@ -65,6 +73,7 @@ class GradingStore(AssignmentStore):
                     class_name=assignment["classes"]["name"],
                     class_id=assignment["class_id"],
                     submitted_at=submission["submitted_at"],
+                    released_at=released_at(submission),
                 )
             rows.extend(batch)
             if len(batch) < 500:
@@ -83,6 +92,31 @@ class GradingStore(AssignmentStore):
             "POST", "/rest/v1/rpc/send_class_for_grading",
             json={"p_class_id": class_id, "p_tutor_id": tutor_id},
         )
+
+    async def release(self, job, review: dict, tutor_id: str):
+        # One transaction saves the approved review, publishes it and logs it (UC8 8.0.8, 8.0.E.2).
+        released = await self.request(
+            "POST", "/rest/v1/rpc/release_result",
+            json={
+                "p_submission_id": job["submission_id"], "p_tutor_id": tutor_id,
+                "p_version": job["version"], "p_review": review,
+            },
+        )
+        if not released:
+            raise HTTPException(409, "This assessment changed. Reopen it before releasing.")
+        return released
+
+    async def reopen(self, job, tutor_id: str):
+        reopened = await self.request(
+            "POST", "/rest/v1/rpc/reopen_result",
+            json={
+                "p_submission_id": job["submission_id"], "p_tutor_id": tutor_id,
+                "p_version": job["version"],
+            },
+        )
+        if not reopened:
+            raise HTTPException(409, "This result changed. Close it and open it again.")
+        return reopened
 
     async def edit(self, job, patch, *, tutor_id: str):
         # Recheck ownership before every write; version prevents two tutors/tabs overwriting edits.

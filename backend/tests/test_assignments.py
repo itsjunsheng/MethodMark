@@ -327,3 +327,109 @@ def test_student_lookup_scopes_code_to_assignment_class_and_active_records(activ
         "is_active": "eq.true",
         "select": "id,student_code",
     }
+
+
+RELEASED = {
+    "review": {
+        "questions": [
+            {
+                "question_id": "q1",
+                "parts": [
+                    {
+                        "part_id": "main",
+                        "checked": True,
+                        "feedback": " Subtract 2 from both sides first. ",
+                        "points": [{"point_id": "a1", "awarded": 0}],
+                    }
+                ],
+            }
+        ]
+    },
+    "released_at": "2026-10-09T02:00:00Z",
+}
+
+
+def test_results_show_only_this_students_released_marks_and_feedback():
+    db = fake_store()
+    path = f"/api/v1/student/assignments/{TOKEN}/result"
+    with client_with(db) as client:
+        assert client.post(path, json={"student_code": "blue-otter"}).json() == {
+            "status": "not_submitted"
+        }
+        db.receipt.return_value = RECEIPT
+        db.released_result.return_value = None
+        pending = client.post(path, json={"student_code": "blue-otter"}).json()
+        assert pending == {"status": "pending", "submitted_at": RECEIPT["submitted_at"]}
+        db.released_result.return_value = deepcopy(RELEASED)
+        response = client.post(path, json={"student_code": " BLUE-OTTER "})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "released" and payload["released_at"] == RELEASED["released_at"]
+    result = payload["result"]
+    assert (result["earned"], result["available"]) == (0, 1)
+    assert result["accuracy"] == {"earned": 0, "available": 1}
+    assert result["method"] == {"earned": 0, "available": 0}
+    part = result["questions"][0]["parts"][0]
+    assert part["marks"] == [{"code": "A1", "awarded": 0, "max_marks": 1}]
+    assert part["feedback"] == "Subtract 2 from both sides first."
+    db.member.assert_awaited_with(ASSIGNED, "blue-otter")
+    db.released_result.assert_awaited_with(SUBMISSION)
+    private = ["SECRET SOLUTION", "x = 3", "Correct answer", "criterion", "evidence", "rationale"]
+    for secret in [*private, "transcription", "confidence", "checked"]:
+        assert secret not in response.text
+
+
+def test_wrong_student_codes_are_capped_for_each_link():
+    db = fake_store()
+    db.member.side_effect = HTTPException(403, "Check your student code with your tutor.")
+    other = str(uuid4())
+    with client_with(db) as client:
+        for _ in range(10):
+            response = client.post(
+                f"/api/v1/student/assignments/{TOKEN}/result", json={"student_code": "red-fox"}
+            )
+            assert response.status_code == 403
+        for action in ["open", "result"]:
+            blocked = client.post(
+                f"/api/v1/student/assignments/{TOKEN}/{action}", json={"student_code": "red-fox"}
+            )
+            assert blocked.status_code == 429 and "15 minutes" in blocked.json()["detail"]
+        submit = client.post(
+            f"/api/v1/student/assignments/{TOKEN}/submit",
+            data={"student_code": "red-fox", "submission_id": SUBMISSION, "drawing": "{}"},
+        )
+        assert submit.status_code == 429
+        db.member.side_effect = None
+        # A correct code on the same link waits too; other links are unaffected.
+        assert (
+            client.post(
+                f"/api/v1/student/assignments/{TOKEN}/result", json={"student_code": "blue-otter"}
+            ).status_code
+            == 429
+        )
+        assert (
+            client.post(
+                f"/api/v1/student/assignments/{other}/result", json={"student_code": "blue-otter"}
+            ).status_code
+            == 200
+        )
+
+
+def test_wrong_codes_at_submission_count_towards_the_cap():
+    db = fake_store()
+    db.submit.side_effect = HTTPException(409, "Check your student code with your tutor.")
+    with client_with(db) as client:
+        for _ in range(10):
+            response = client.post(
+                f"/api/v1/student/assignments/{TOKEN}/submit",
+                data={
+                    "student_code": "red-fox",
+                    "submission_id": SUBMISSION,
+                    "drawing": json.dumps(DRAWING),
+                },
+            )
+            assert response.status_code == 409
+        blocked = client.post(
+            f"/api/v1/student/assignments/{TOKEN}/open", json={"student_code": "red-fox"}
+        )
+        assert blocked.status_code == 429

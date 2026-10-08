@@ -118,6 +118,12 @@ export async function mockAssignments(page: Page, school?: Awaited<ReturnType<ty
         },
       } });
     }
+    if (segments[6] === 'result') {
+      const code = request.postDataJSON().student_code;
+      const member = school?.students.find(m => m.class_id === assignment.class_id && m.student_code === code && m.is_active);
+      const work = state.submissions.find(s => s.student_id === member?.id && s.assignment_id === assignment.id);
+      return route.fulfill({ json: work ? { status: 'pending', submitted_at: work.submitted_at } : { status: 'not_submitted' } });
+    }
     if (state.failSubmit) return route.fulfill({ status: 503, json: { detail: 'Could not save your work. Try again.' } });
     if (!meta.accepting_submissions) return route.fulfill({ status: 409, json: { detail: 'The submission deadline has passed.' } });
     const body = request.postData() ?? '';
@@ -139,6 +145,7 @@ export async function mockStudentPaper(page: Page) {
       due_at: '2099-01-01T15:59:00Z', duration: 45, question_count: 4, accepting_submissions: true };
     if (request.method() === 'GET') return route.fulfill({ json: meta });
     if (segments[6] === 'submit') return route.fulfill({ json: { id: randomUUID(), submitted_at: new Date().toISOString() } });
+    if (segments[6] === 'result') return route.fulfill({ json: { status: 'pending', submitted_at: new Date().toISOString() } });
     return route.fulfill({ json: { assignment: meta, student_code: request.postDataJSON().student_code,
       submitted_at: null, paper: { id: 'paper', title: meta.title, subject: 'Mathematics', school_year: 3,
         subject_level: 'G3', duration: 45, instructions: 'Show your working.',

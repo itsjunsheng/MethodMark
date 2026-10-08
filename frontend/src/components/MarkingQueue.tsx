@@ -3,12 +3,12 @@ import { ClipboardCheck, RefreshCw, Send } from 'lucide-react';
 import { retryGrading, sendClassForGrading } from '../api/grading';
 import type { QueueItem } from '../types/grading';
 import { singaporeDate } from '../lib/assignmentStatus';
-import { needsReview, reviewState } from '../lib/reviewState';
+import { needsReview, readyToRelease, reviewState } from '../lib/reviewState';
 import { useToast } from './Toast';
 import { GradingReview } from './GradingReview';
 import './MarkingQueue.css';
 
-const tabs = ['All submissions', 'Awaiting review', 'Flagged', 'Reviewed'] as const;
+const tabs = ['All submissions', 'Awaiting review', 'Flagged', 'Ready to release', 'Released'] as const;
 type QueueTab = typeof tabs[number];
 
 function matchesTab(item: QueueItem, tab: QueueTab) {
@@ -16,7 +16,8 @@ function matchesTab(item: QueueItem, tab: QueueTab) {
     case 'All submissions': return true;
     case 'Awaiting review': return needsReview(item);
     case 'Flagged': return item.flagged && needsReview(item);
-    case 'Reviewed': return item.review_complete;
+    case 'Ready to release': return readyToRelease(item);
+    case 'Released': return item.status === 'released';
   }
 }
 
@@ -100,8 +101,8 @@ function SubmissionRow({ item, retrying, onRetry, onReview }: {
       <div className="grading-row-actions">
         {item.status === 'failed' && <button className="btn secondary" disabled={!!retrying} onClick={() => void onRetry(item.submission_id)}>
           {retrying === item.submission_id ? 'Queueing...' : 'Retry grading'}</button>}
-        {['failed', 'awaiting_review'].includes(item.status) && <button className="btn secondary" onClick={() => onReview(item)}>
-          {item.status === 'failed' ? 'Review manually' : 'Review'}</button>}
+        {['failed', 'awaiting_review', 'released'].includes(item.status) && <button className="btn secondary" onClick={() => onReview(item)}>
+          {item.status === 'failed' ? 'Review manually' : item.status === 'released' ? 'View result' : 'Review'}</button>}
       </div>
     </div>
   </li>;

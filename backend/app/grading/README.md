@@ -1,15 +1,16 @@
 # Grading pipeline
 
-Implements proposal phases 5-6 and UC7/UC8: interpret handwriting, propose rubric marks,
-and save tutor review drafts. Result approval, release and student results are not implemented.
+Implements proposal phases 5-6 and UC7, UC8 and UC12: interpret handwriting, propose rubric marks,
+save tutor review drafts, approve and release results, and show released results to students.
 
 ## Start
 
 1. Run the full `supabase/update.sql` in the Supabase SQL Editor for the existing database.
    Use `supabase/setup.sql` only for a fresh application schema. Keep existing Auth users.
    Submissions without a job appear as **Not yet sent for grading**; existing jobs keep their state.
-   If the grading schema is already installed, the focused migration
-   `supabase/migrations/20261008_manual_class_grading.sql` is sufficient for class-level sending.
+   If the grading schema is already installed, the focused migrations
+   `supabase/migrations/20261008_manual_class_grading.sql` (class-level sending) and
+   `supabase/migrations/20261008_result_release.sql` (release, results and audit trail) are sufficient.
 2. Add one provider key to `backend/.env`. The selected provider serves both stages:
 
    ```dotenv
@@ -50,9 +51,15 @@ and save tutor review drafts. Result approval, release and student results are n
    Completed assessments appear under
    **Awaiting review**; inspect original work, transcription, rubric points and feedback.
    Edit marks or feedback and **Save review draft**. Students cannot see these drafts.
-   Once every part is ticked **I have checked this part**, the submission moves to **Reviewed**;
+   Once every part is ticked **I have checked this part**, the submission moves to **Ready to release**;
    a partly checked draft shows **Review in progress** and stays under **Awaiting review**.
-   The queue's `review_complete` field carries this rule, which Insights also uses.
+   The queue's `review_complete` field carries this rule.
+5. **Approve and release** (UC8) shows the total and the method and accuracy split for confirmation,
+   then saves and releases in one database transaction. The submission moves to **Released** and
+   becomes read-only; **Reopen to make changes** lets the tutor correct it, while the student keeps
+   the last released result until the next release. Insights counts only released results.
+6. Students reopen the assignment link and enter their code (UC12). They see **Your tutor is
+   reviewing your work** until release, then their marks per rubric point code and the tutor's feedback.
 
 The worker must remain running separately from Uvicorn. Without it, submissions stay queued.
 Restart it after changing provider settings. Missing keys stop the worker with a configuration
@@ -61,7 +68,7 @@ After correcting the issue, choose **Retry grading**, or **Review manually**.
 
 ## Flow and responsibilities
 
-`submission transaction -> submitted job -> tutor sends class -> queued job -> vision transcription -> rubric assessment -> tutor review`
+`submission transaction -> submitted job -> tutor sends class -> queued job -> vision transcription -> rubric assessment -> tutor review -> approve and release -> student result`
 
 - The submission trigger inserts one `submitted` job in the same transaction as the receipt (UC11).
   Retrying an existing submission ID returns the same receipt and creates no extra job.
@@ -88,7 +95,15 @@ After correcting the issue, choose **Retry grading**, or **Review manually**.
 - `store.py` persists original AI results separately from `review_draft`. Version checks prevent
   stale tabs overwriting reviews; lease checks prevent stale workers overwriting newer attempts.
 - `api/routes/grading.py` verifies the owning tutor on every read/write. RLS also isolates tutors;
-  students have no access to `grading_jobs`. There is no approval or release endpoint (UC12).
+  students have no access to `grading_jobs`. `POST /{id}/release` accepts only a complete, valid
+  review and calls the service-only `release_result` function, which updates the job, writes the
+  `results` row and logs the release atomically; `POST /{id}/reopen` calls `reopen_result`.
+- `results` holds the approved review a student may see; `POST /api/v1/student/assignments/{token}/result`
+  reads only that table for the student matched by link and code, and builds the student view in
+  `results.py` without rubric criteria, solutions, AI evidence or transcriptions.
+- `review_events` is an append-only audit trail (SRS 6.6): a trigger logs every saved draft with the
+  tutor who saved it, and release and reopen are logged by their functions. The AI's original
+  proposal stays unchanged in `grading_jobs.result`, so tutor changes remain distinguishable.
 
 One `grading_jobs` row holds the queue state, original assessment and review draft for each
 submission. Deleting its submission cascades to the job; archiving a paper or class retains it.
@@ -121,7 +136,11 @@ uv run ruff check .
 ```
 
 Browser coverage: `frontend/tests/grading.spec.ts` checks empty/live queues, retry, editable
-rubric marks, persisted drafts, conflict errors, and tablet/mobile layouts with mocked services.
+rubric marks, persisted drafts, conflict errors, approve and release, reopen, failed releases, and
+tablet/mobile layouts with mocked services; `frontend/tests/results.spec.ts` checks the student's
+pending and released views, retry after a failed load, and phone layout.
+`supabase/tests/result_release.mjs` checks release and reopen ownership, versioning, the audit
+trail, read access and deletion cascades, for both a fresh setup and an upgrade.
 `supabase/tests/class_grading.mjs` exercises fresh setup and upgrade in isolated PostgreSQL,
 including class ownership, repeated sends, existing-job preservation and worker claiming.
 With `@electric-sql/pglite` installed in a temporary directory, run it from the repository root:

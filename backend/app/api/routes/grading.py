@@ -1,4 +1,4 @@
-"""Authenticated review queue. No result-release endpoint exists in this phase."""
+"""Authenticated review queue, tutor review and result release (UC7, UC8)."""
 
 from datetime import UTC, datetime
 from typing import Annotated
@@ -9,9 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import get_settings, require_tutor
 from app.core.config import Settings
-from app.grading.pipeline import blank_result, validate_review
-from app.grading.schemas import GradingError, SaveReview
-from app.grading.store import GradingStore
+from app.grading.pipeline import blank_result, review_complete, validate_review
+from app.grading.schemas import GradingError, ReopenResult, SaveReview
+from app.grading.store import GradingStore, released_at
 
 router = APIRouter(prefix="/grading", tags=["Grading"])
 
@@ -44,6 +44,8 @@ async def detail(submission_id: UUID, db: Store, tutor: Tutor):
         raise HTTPException(409, "This submission is still being processed.")
     submission = job.pop("submissions")
     assignment = submission.pop("assignments")
+    released = released_at(submission)
+    submission.pop("results", None)
     paper = assignment["papers"]
     manual_error = None
     if job["result"] is None:
@@ -59,6 +61,7 @@ async def detail(submission_id: UUID, db: Store, tutor: Tutor):
         "photos": photos,
         "class_name": assignment["classes"]["name"],
         "manual_error": manual_error,
+        "released_at": released,
     }
 
 
@@ -83,22 +86,51 @@ async def retry(submission_id: UUID, db: Store, tutor: Tutor):
     return {"status": "queued"}
 
 
-@router.put("/{submission_id}/review")
-async def save_review(submission_id: UUID, payload: SaveReview, db: Store, tutor: Tutor):
+async def reviewable(submission_id: UUID, payload: SaveReview, db: GradingStore, tutor: str):
     job = await db.owned_job(str(submission_id), tutor)
+    if job["status"] == "released":
+        raise HTTPException(409, "This result has been released. Reopen it to make changes.")
     if job["status"] not in ("awaiting_review", "failed") or job["version"] != payload.version:
         raise HTTPException(409, "This assessment changed. Reopen it before saving.")
     try:
         validate_review(payload.draft, job["submissions"]["assignments"]["papers"])
     except GradingError as error:
         raise HTTPException(422, str(error)) from None
+    return job
+
+
+@router.put("/{submission_id}/review")
+async def save_review(submission_id: UUID, payload: SaveReview, db: Store, tutor: Tutor):
+    job = await reviewable(submission_id, payload, db, tutor)
     saved = await db.edit(
         job,
         {
             "review_draft": payload.draft.model_dump(),
             "review_saved_at": datetime.now(UTC).isoformat(),
+            "reviewed_by": tutor,
             "status": "awaiting_review",
         },
         tutor_id=tutor,
     )
     return {"version": saved["version"], "review_saved_at": saved["review_saved_at"]}
+
+
+@router.post("/{submission_id}/release")
+async def release(submission_id: UUID, payload: SaveReview, db: Store, tutor: Tutor):
+    # Approve and Release (UC8 8.0.5-8.0.8): only a complete, valid review reaches the student.
+    job = await reviewable(submission_id, payload, db, tutor)
+    review = payload.draft.model_dump()
+    if not review_complete(review):
+        raise HTTPException(
+            422, "Check every part and assess every marking point before releasing."
+        )
+    released = await db.release(job, review, tutor)
+    return {"version": released["version"], "released_at": released["released_at"]}
+
+
+@router.post("/{submission_id}/reopen")
+async def reopen(submission_id: UUID, payload: ReopenResult, db: Store, tutor: Tutor):
+    job = await db.owned_job(str(submission_id), tutor)
+    if job["status"] != "released" or job["version"] != payload.version:
+        raise HTTPException(409, "This result changed. Close it and open it again.")
+    return await db.reopen(job, tutor)

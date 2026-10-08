@@ -66,5 +66,9 @@ class SaveReview(StrictModel):
     draft: ReviewDraft
 
 
+class ReopenResult(StrictModel):
+    version: int = Field(ge=0)
+
+
 class GradingError(Exception):
     """A safe message that may be shown to the tutor."""

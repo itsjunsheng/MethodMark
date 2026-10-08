@@ -374,7 +374,7 @@ def test_grading_api_requires_tutor_and_keeps_drafts_private():
         assert saved.status_code == 200
         patch = db.edit.await_args.args[1]
         assert patch["status"] == "awaiting_review" and "result" not in patch
-        assert client.post(f"/api/v1/grading/{SUBMISSION}/release").status_code == 404
+        assert patch["reviewed_by"] == "tutor"  # Logged by the audit trigger.
         db.owned_job.side_effect = HTTPException(404, "Unavailable")
         assert client.get(f"/api/v1/grading/{SUBMISSION}").status_code == 404
 
@@ -454,6 +454,8 @@ def test_queue_says_whether_each_review_is_complete_without_sending_drafts():
             assert [item["review_complete"] for item in rows] == [True, False, False]
             assert all("review_draft" not in item for item in rows)
             assert all(item["class_id"] == "class-1" for item in rows)
+            assert [item["released_at"] for item in rows] == [None, None, None]
+            assert "results(released_at)" in db.request.await_args.kwargs["params"]["select"]
 
     asyncio.run(run())
 
@@ -505,6 +507,113 @@ def test_unsent_submissions_cannot_be_reviewed_or_retried():
             f"/api/v1/grading/{SUBMISSION}/review", json={"version": 2, "draft": draft()}
         ).status_code == 409
     db.edit.assert_not_awaited()
+
+
+def test_release_needs_a_complete_review_and_the_authenticated_tutor():
+    db = AsyncMock(
+        owned_job=AsyncMock(side_effect=lambda *_: job()),
+        release=AsyncMock(return_value={"version": 3, "released_at": "2026-10-09T01:00:00Z"}),
+    )
+    path = f"/api/v1/grading/{SUBMISSION}/release"
+    with api(db, False) as client:
+        assert client.post(path, json={"version": 2, "draft": draft()}).status_code == 401
+    with api(db) as client:
+        unchecked = draft()
+        unchecked["questions"][0]["parts"][0]["checked"] = False
+        refused = client.post(path, json={"version": 2, "draft": unchecked})
+        assert refused.status_code == 422 and "Check every part" in refused.json()["detail"]
+        unassessed = draft()
+        unassessed["questions"][0]["parts"][0].update(checked=False)
+        unassessed["questions"][0]["parts"][0]["points"][1]["awarded"] = None
+        assert client.post(path, json={"version": 2, "draft": unassessed}).status_code == 422
+        over = draft()
+        over["questions"][0]["parts"][0]["points"][0]["awarded"] = 5
+        assert client.post(path, json={"version": 2, "draft": over}).status_code == 422
+        assert client.post(path, json={"version": 1, "draft": draft()}).status_code == 409
+        db.release.assert_not_awaited()
+        released = client.post(path, json={"version": 2, "draft": draft(), "tutor_id": "x"})
+        assert released.status_code == 422  # Extra fields, such as another tutor, are refused.
+        released = client.post(path, json={"version": 2, "draft": draft()})
+        assert released.status_code == 200
+        assert released.json() == {"version": 3, "released_at": "2026-10-09T01:00:00Z"}
+        job_arg, review, tutor = db.release.await_args.args
+        assert job_arg["version"] == 2 and review == draft() and tutor == "tutor"
+        db.release.side_effect = HTTPException(409, "This assessment changed.")
+        assert client.post(path, json={"version": 2, "draft": draft()}).status_code == 409
+    for state in ["submitted", "queued", "processing"]:
+        db.owned_job.side_effect = lambda *_, state=state: job(state)
+        with api(db) as client:
+            assert client.post(path, json={"version": 2, "draft": draft()}).status_code == 409
+
+
+def test_failed_jobs_can_be_marked_manually_and_released():
+    db = AsyncMock(
+        owned_job=AsyncMock(side_effect=lambda *_: job("failed")),
+        release=AsyncMock(return_value={"version": 3, "released_at": "now"}),
+    )
+    with api(db) as client:
+        response = client.post(
+            f"/api/v1/grading/{SUBMISSION}/release", json={"version": 2, "draft": draft()}
+        )
+    assert response.status_code == 200 and db.release.await_count == 1
+
+
+def test_released_results_are_read_only_until_reopened():
+    db = AsyncMock(
+        owned_job=AsyncMock(side_effect=lambda *_: job("released")),
+        reopen=AsyncMock(return_value={"version": 3}),
+    )
+    with api(db) as client:
+        for method, path, body in [
+            ("put", "review", {"version": 2, "draft": draft()}),
+            ("post", "release", {"version": 2, "draft": draft()}),
+        ]:
+            response = getattr(client, method)(f"/api/v1/grading/{SUBMISSION}/{path}", json=body)
+            assert response.status_code == 409 and "Reopen it" in response.json()["detail"]
+        db.edit.assert_not_awaited()
+        reopen = f"/api/v1/grading/{SUBMISSION}/reopen"
+        assert client.post(reopen, json={"version": 1}).status_code == 409
+        assert client.post(reopen, json={"version": 2}).json() == {"version": 3}
+        db.reopen.assert_awaited_once()
+        assert db.reopen.await_args.args[1] == "tutor"
+        db.owned_job.side_effect = lambda *_: job()
+        assert client.post(reopen, json={"version": 2}).status_code == 409
+    with api(db, False) as client:
+        response = client.post(f"/api/v1/grading/{SUBMISSION}/reopen", json={"version": 2})
+        assert response.status_code == 401
+
+
+def test_detail_says_when_the_result_was_released():
+    released = job("released")
+    released["submissions"]["results"] = {"released_at": "2026-10-09T01:00:00Z"}
+    db = AsyncMock(owned_job=AsyncMock(return_value=released))
+    with api(db) as client:
+        detail = client.get(f"/api/v1/grading/{SUBMISSION}").json()
+    assert detail["released_at"] == "2026-10-09T01:00:00Z"
+    assert "results" not in detail["submission"]
+
+
+def test_store_releases_and_reopens_through_one_transaction_each():
+    async def run():
+        async with httpx.AsyncClient() as client:
+            db = GradingStore(settings(), client)
+            db.request = AsyncMock(return_value=None)
+            with pytest.raises(HTTPException) as error:
+                await db.release(job(), draft(), "owner")
+            assert error.value.status_code == 409
+            assert db.request.await_args.args == ("POST", "/rest/v1/rpc/release_result")
+            assert db.request.await_args.kwargs["json"] == {
+                "p_submission_id": SUBMISSION, "p_tutor_id": "owner",
+                "p_version": 2, "p_review": draft(),
+            }
+            with pytest.raises(HTTPException) as error:
+                await db.reopen(job("released"), "owner")
+            assert error.value.status_code == 409
+            assert db.request.await_args.args == ("POST", "/rest/v1/rpc/reopen_result")
+            db.request = AsyncMock(return_value={"version": 3, "released_at": "now"})
+            assert await db.release(job(), draft(), "owner") == {"version": 3, "released_at": "now"}
+
+    asyncio.run(run())
 
 
 def test_worker_persists_provisional_results_or_safe_failure_and_never_releases():

@@ -11,6 +11,7 @@ export function buildNotices(queue: QueueItem[], assignments: ClassAssignment[],
     const who = item.student_name || item.student_code;
     const at = item.updated_at || item.submitted_at;
     if (item.status === 'submitted') return { id: 'submitted:' + item.submission_id, kind: 'submitted', title: `${who} submitted ${item.paper_title}`, detail: 'Ready to send for grading / ' + item.class_name, at: item.submitted_at, target: 'Marking queue' };
+    if (item.status === 'released') return null;
     if (item.status === 'failed') return { id: 'failed:' + item.submission_id, kind: 'failed', title: `Grading failed for ${who}`, detail: item.error || item.paper_title, at, target: 'Marking queue' };
     if (item.status !== 'awaiting_review') return { id: 'processing:' + item.submission_id, kind: 'processing', title: `${who} submitted ${item.paper_title}`, detail: 'AI marking in progress', at: item.submitted_at, target: 'Marking queue' };
     // The bell announces newly marked work; once the tutor opens a review it stops (the queue tracks the rest).

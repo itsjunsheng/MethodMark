@@ -13,24 +13,25 @@ async function openInsights(page: Page) {
   await page.locator('.sidebar').getByRole('button', { name: 'Insights', exact: true }).click();
 }
 
-test('overview shows real checked-work figures instead of sample data', async ({ page }) => {
+test('overview shows released-result figures instead of sample data', async ({ page }) => {
   await mockInsights(page);
   await page.goto('/');
   const stats = page.locator('.stats-grid');
   await expect(stats.getByText('65%')).toBeVisible();
-  await expect(stats.getByText('From 52 checked parts')).toBeVisible();
+  await expect(stats.getByText('From 10 released results')).toBeVisible();
   await expect(stats.getByText('48')).toHaveCount(0);
   await expect(page.getByRole('img', { name: /Average score by assignment: Algebra checkpoint \(Saturday maths\) 58%, Quadratics practice \(Saturday maths\) 71%/ })).toBeVisible();
 });
 
-test('insights summarise checked work, with tables, tooltips and student drill-down', async ({ page }) => {
+test('insights summarise released results, with tables, tooltips and student drill-down', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await mockInsights(page);
   await openInsights(page);
   const summary = page.getByRole('region', { name: 'Summary' });
-  for (const value of ['65%', '78%', '51%', '29%', '74%']) await expect(summary.getByText(value, { exact: true })).toBeVisible();
+  for (const value of ['65%', '78%', '51%', '29%', '71%']) await expect(summary.getByText(value, { exact: true })).toBeVisible();
   await expect(summary.getByText('9 of 31 parts with both mark types')).toBeVisible();
+  await expect(summary.getByText('10 of 14 submissions released')).toBeVisible();
 
   // Every chart has a table twin.
   await page.getByRole('button', { name: 'Table' }).first().click();
@@ -46,12 +47,12 @@ test('insights summarise checked work, with tables, tooltips and student drill-d
   await expect(page.getByText('Obtains both roots, 3/2 and −2.')).toBeVisible();
   await expect(page.getByText('5 of 6 missed')).toBeVisible();
   await expect(page.getByText('Your factorisation is right. Check the signs when you solve each bracket.')).toBeVisible();
-  await expect(page.getByText('6 reviewed · 1 awaiting review · 1 not submitted')).toBeVisible();
+  await expect(page.getByText('6 released · 1 awaiting review · 1 not submitted')).toBeVisible();
   await expect(page.getByText('1 grading failed', { exact: false })).toBeVisible();
 
   const rows = page.locator('.insights-student-table tbody tr');
   await expect(rows.first()).toContainText('red-fox');
-  await expect(rows.nth(2)).toContainText('No checked work');
+  await expect(rows.nth(2)).toContainText('No released results');
   await page.getByLabel('Search students').fill('aisha');
   await expect(rows).toHaveCount(1);
   await page.getByRole('button', { name: 'Aisha' }).click();
@@ -79,12 +80,12 @@ test('filters scope every view and the report exports the current students', asy
   expect(csv).toContain('"Quadratic equations; Coordinate geometry"');
 });
 
-test('without checked work the page explains what is missing and links to the queue', async ({ page }) => {
+test('without released results the page explains what is missing and links to the queue', async ({ page }) => {
   await mockInsights(page, { ...emptyInsights, summary: { ...emptyInsights.summary, submissions: 3, total_parts: 12 },
     status: [{ assignment_id: 'a1', title: 'Algebra checkpoint', class_name: 'Saturday maths', due_at: null, students: 4,
       submitted: 3, not_submitted: 1, processing: 1, awaiting_review: 2, failed: 0, reviewed: 0 }] });
   await openInsights(page);
-  await expect(page.getByText('No checked work yet.')).toBeVisible();
+  await expect(page.getByText('No released results yet.')).toBeVisible();
   await expect(page.getByText('2 awaiting review · 1 processing · 1 not submitted')).toBeVisible();
   await expect(page.locator('.insights-kpi strong').first()).toHaveText('–');
   await page.getByRole('button', { name: 'Open marking queue' }).click();
@@ -113,7 +114,7 @@ test('the score trend draws one line per class on a time axis', async ({ page })
   await openInsights(page);
   const card = page.locator('section.insights-card', { has: page.getByRole('heading', { name: 'Score trend' }) });
   await expect(card.getByRole('list', { name: 'Classes' }).getByRole('listitem')).toHaveText(['Saturday maths', 'Sunday maths']);
-  // Two papers due the same day share one position and one label; unchecked work is not plotted.
+  // Two papers due the same day share one position and one label; unreleased work is not plotted.
   await expect(card.locator('.insights-axis')).toHaveText(['1 Oct', '15 Oct']);
   await expect(card.locator('.insights-dot')).toHaveCount(3);
   // Each class keeps its own line and colour: Saturday has two points, Sunday one.

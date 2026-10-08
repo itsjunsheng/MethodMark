@@ -26,3 +26,9 @@ export const saveReview = (id: string, version: number, draft: ReviewDraft) =>
   request<{ version: number; review_saved_at: string }>('/' + id + '/review', {
     method: 'PUT', body: JSON.stringify({ version, draft }),
   });
+export const releaseResult = (id: string, version: number, draft: ReviewDraft) =>
+  request<{ version: number; released_at: string }>('/' + id + '/release', {
+    method: 'POST', body: JSON.stringify({ version, draft }),
+  });
+export const reopenResult = (id: string, version: number) =>
+  request<{ version: number }>('/' + id + '/reopen', { method: 'POST', body: JSON.stringify({ version }) });

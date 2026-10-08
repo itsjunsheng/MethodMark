@@ -102,7 +102,7 @@ export function SettingsPage({ user, name, onNameChange, onLogout }: {
         <div className="settings-rows">
           <div><span><strong>Curriculum</strong><small>Singapore secondary mathematics</small></span><span className="badge green"><span className="badge-dot" />Secondary 1–5</span></div>
           <div><span><strong>Time zone</strong><small>Assignment deadlines and activity timestamps</small></span><span>Asia/Singapore (GMT+8)</span></div>
-          <div><span><strong>Tutor approval</strong><small>Every AI-proposed mark waits for your check. Insights count only checked work.</small></span><ShieldCheck size={21} className="green-text" aria-label="Always on" /></div>
+          <div><span><strong>Tutor approval</strong><small>Every AI-proposed mark waits for your check. Insights count only results you release.</small></span><ShieldCheck size={21} className="green-text" aria-label="Always on" /></div>
         </div>
       </section>
       <section className="panel settings-section settings-signout">

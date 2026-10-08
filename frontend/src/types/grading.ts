@@ -1,11 +1,13 @@
 import type { Paper } from '../data';
 import type { Submission } from './assignments';
 
-export type GradingStatus = 'submitted' | 'queued' | 'processing' | 'awaiting_review' | 'failed';
+export type GradingStatus = 'submitted' | 'queued' | 'processing' | 'awaiting_review' | 'failed' | 'released';
 export type QueueItem = {
   submission_id: string; status: GradingStatus; flagged: boolean; error: string | null;
   student_code: string; student_name: string | null; class_id: string; class_name: string; paper_title: string;
   submitted_at: string; review_saved_at: string | null; version: number; updated_at?: string;
+  // When the student last received a released result; kept while a reopened result is corrected.
+  released_at: string | null;
   // Every part of the saved review is ticked as checked (set by the server).
   review_complete: boolean;
 };
@@ -21,5 +23,5 @@ export type GradingDetail = {
   job: { submission_id: string; status: GradingStatus; vision_model?: string | null; result: GradingResult | null; error: string | null;
     review_draft: ReviewDraft | null; version: number; review_saved_at: string | null };
   submission: Submission; paper: Paper; photos: { name: string; url: string }[];
-  class_name: string; manual_error: string | null;
+  class_name: string; manual_error: string | null; released_at: string | null;
 };

@@ -27,12 +27,13 @@ See [frontend setup](frontend/README.md) for build and browser-check commands.
 
 ## Explore the prototype
 
-- **Overview:** assignment, student and review counts, the class average and score trend from checked work, recent assignments, and activity.
+- **Overview:** assignment, student and review counts, the class average and score trend from released results, recent assignments, and activity.
 - **Practice papers:** search your saved library; create a paper from the question bank; edit questions and worked solutions; inspect method and accuracy rubrics; approve before publishing.
 - **Assignments:** class/status/search filters, submission progress, shared student links, and assignment details. Tutors can permanently delete an assignment from the list or detail view, including its submissions and grading records, while keeping the paper and other classes' assignments. Published assignments retain a snapshot of their paper and rubric.
-- **Marking queue:** real submissions with processing states, rubric-based AI proposals, confidence flags, original handwriting/photos, and private tutor review drafts. Result release is outside this phase.
+- **Marking queue:** real submissions with processing states, rubric-based AI proposals, confidence flags, original handwriting/photos, private tutor review drafts, and **Approve and release** once every part is checked (UC8). Released results can be reopened and released again; every save, release and reopen is recorded in an append-only audit table.
+- **Student results:** students reopen the assignment link with their code to see a pending status or their released marks and feedback (UC12). Rubric text, AI evidence and drafts are never sent to students, and wrong codes are capped at 10 per link every 15 minutes.
 - **Classes & students:** create real classes in Supabase; add students in batches with colour-animal codes; save optional names; create separate student records for each class; search and copy codes.
-- **Insights:** class and period filters; average, method and answer marks; score trend and spread; topic mastery; common mistakes; submission status; per-student learning gaps; and CSV export. Only parts the tutor has checked in a review are counted.
+- **Insights:** class and period filters; average, method and answer marks; score trend and spread; topic mastery; common mistakes; submission status; per-student learning gaps; and CSV export. Only results the tutor has approved and released are counted.
 - **Settings:** display name saved to the tutor's account, password change, teaching preferences and logout.
 - **Notifications:** the bell lists work ready for review, flagged or failed grading, submissions in progress and assignments past their deadline.
 - **Student assignments:** account-free class-code entry, handwriting on the paper, print/save PDF, and real submission of ink or photos.

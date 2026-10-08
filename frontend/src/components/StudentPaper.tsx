@@ -8,6 +8,7 @@ import { useHandwriting } from '../lib/useHandwriting';
 import type { InkTool } from '../lib/useHandwriting';
 import { ExamPaper } from './ExamPaper';
 import { PaperToolbar, PaperToolbarButton } from './PaperToolbar';
+import { StudentResult } from './StudentResult';
 import './StudentPaper.css';
 
 export function StudentPaper({ token, access }: { token: string; access: StudentAccess }) {
@@ -61,6 +62,7 @@ export function StudentPaper({ token, access }: { token: string; access: Student
     <h1>Your work has been submitted.</h1>
     <p>Your tutor can now see your submission.</p>
     <p className="field-hint">{studentCode} &middot; {singaporeDate(submittedAt)}</p>
+    <StudentResult token={token} code={studentCode} />
   </section>;
 
   return <>

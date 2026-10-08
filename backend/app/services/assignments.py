@@ -120,6 +120,15 @@ class AssignmentStore:
         )
         return rows[0] if rows else None
 
+    async def released_result(self, submission_id: str):
+        # Only the released copy is read; drafts and AI proposals never reach students.
+        rows = await self.request(
+            "GET",
+            "/rest/v1/results",
+            params={"submission_id": f"eq.{submission_id}", "select": "review,released_at"},
+        )
+        return rows[0] if rows else None
+
     async def upload(self, assignment, member, submission_id, files):
         uploaded = []
         attempt = uuid4()

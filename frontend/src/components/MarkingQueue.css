@@ -56,3 +56,8 @@
 .grading-private { padding:16px 24px; font-size:12px; color:#809075; border-top:1px solid var(--border); }
 @media(max-width:900px) { .grading-list li { gap:14px; } }
 @media(max-width:650px) { .grading-review-columns { grid-template-columns:1fr; } .grading-original { border-right:0; border-bottom:1px solid var(--border); } .grading-original,.grading-decisions { padding:18px; } .grading-list li { grid-template-columns:1fr; } .grading-row-result { text-align:left; } .grading-row-actions { justify-content:flex-start; } .grading-tabs { padding:12px; } .grading-list-tools { padding:16px; } }
+.grading-status.released { color:var(--green); font-weight:700; }
+.grading-review-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.grading-release-confirm { display:grid; gap:12px; padding:14px 24px; font-size:13px; line-height:1.6; background:#eef4ec; border-top:1px solid #d6e3d4; border-bottom:1px solid #d6e3d4; }
+.grading-release-confirm .modal-actions { margin:0; padding:0; border:0; justify-content:flex-end; }
+.grading-release-confirm .btn { min-height:36px; padding:9px 14px; font-size:12px; }

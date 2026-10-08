@@ -26,7 +26,7 @@ function useWidth<T extends Element>(fallback: number) {
 }
 
 export function downloadInsightsCsv(data: Insights, name = 'methodmark-insights.csv') {
-  const rows = [['Student code', 'Student', 'Class', 'Submitted', 'Fully reviewed', 'Average (%)', 'Method marks (%)', 'Answer marks (%)', 'Learning focus'],
+  const rows = [['Student code', 'Student', 'Class', 'Submitted', 'Results released', 'Average (%)', 'Method marks (%)', 'Answer marks (%)', 'Learning focus'],
     ...data.students.map(s => [s.code, s.name ?? '', s.class_name, s.submitted, s.reviewed, s.average ?? '', s.method_rate ?? '', s.answer_rate ?? '', s.gaps.join('; ')])];
   // Prefix formula-like cells so spreadsheet apps treat names as text.
   const cell = (value: string | number) => { const text = String(value); return '"' + (/^[=+\-@]/.test(text) ? "'" + text : text).replaceAll('"', '""') + '"'; };
@@ -51,11 +51,11 @@ export function TrendChart({ trend, classes, height = 220 }: { trend: InsightTre
   const [active, setActive] = useState<string | null>(null);
   const order = classes.map(row => row.id);
   const rank = (classId: string) => order.indexOf(classId);
-  // Only assignments with checked work are plotted; the table view lists every assignment.
+  // Only assignments with released results are plotted; the table view lists every assignment.
   const points = trend.filter(row => row.average !== null && row.date)
     .map(row => ({ ...row, time: Date.parse(row.date!) }))
     .sort((a, b) => a.time - b.time || rank(a.class_id) - rank(b.class_id));
-  if (!points.length) return <div className="insights-plot" ref={ref}><p className="insights-empty-note">No checked work in this period yet.</p></div>;
+  if (!points.length) return <div className="insights-plot" ref={ref}><p className="insights-empty-note">No released results in this period yet.</p></div>;
   const series = [...new Set(points.map(row => row.class_id))].sort((a, b) => rank(a) - rank(b))
     .map(id => ({ id, name: points.find(row => row.class_id === id)!.class_name, rows: points.filter(row => row.class_id === id) }));
   // One line uses the series colour. With several, a class keeps its colour under any filter:
@@ -110,7 +110,7 @@ export function TrendChart({ trend, classes, height = 220 }: { trend: InsightTre
       {ends.map(({ line, row, labelY }) => <text key={line.id} className="insights-end-label" x={x(row.time) + 10} y={labelY}>{pct(row.average)}</text>)}
     </svg>
     {shown && <div className="insights-tooltip" style={{ left: Math.min(Math.max(x(shown.time), 90), width - 90) }} role="status">
-      <strong>{pct(shown.average)}</strong><span>{shown.title}</span><small>{shown.class_name} · due {shortDate(shown.date)} · {shown.reviewed} of {shown.submitted} fully reviewed</small>
+      <strong>{pct(shown.average)}</strong><span>{shown.title}</span><small>{shown.class_name} · due {shortDate(shown.date)} · {shown.reviewed} of {shown.submitted} released</small>
     </div>}
   </div>;
 }
@@ -119,12 +119,12 @@ function Distribution({ bins }: { bins: Insights['distribution'] }) {
   const [ref, width] = useWidth<HTMLDivElement>(320);
   const [active, setActive] = useState<number | null>(null);
   const total = bins.reduce((sum, bin) => sum + bin.count, 0);
-  if (!total) return <div className="insights-plot" ref={ref}><p className="insights-empty-note">Score spread appears once whole submissions are fully reviewed.</p></div>;
+  if (!total) return <div className="insights-plot" ref={ref}><p className="insights-empty-note">Score spread appears once results are released.</p></div>;
   const height = 190, top = 22, bottom = 30, max = Math.max(...bins.map(bin => bin.count));
   const slot = (width - 16) / bins.length, bar = Math.min(24, slot * .45);
   const h = (count: number) => count / max * (height - top - bottom);
   return <div className="insights-plot" ref={ref}>
-    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label={'Fully reviewed submissions by score: ' + bins.map(bin => `${bin.label} ${bin.count}`).join(', ')}>
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label={'Released results by score: ' + bins.map(bin => `${bin.label} ${bin.count}`).join(', ')}>
       <line className="insights-baseline" x1={8} x2={width - 8} y1={height - bottom} y2={height - bottom} />
       {bins.map((bin, index) => {
         const cx = 8 + slot * index + slot / 2, cap = height - bottom - h(bin.count);
@@ -140,7 +140,7 @@ function Distribution({ bins }: { bins: Insights['distribution'] }) {
 }
 
 function TopicBars({ topics }: { topics: InsightTopic[] }) {
-  if (!topics.length) return <p className="insights-empty-note">Topic mastery appears once parts are checked.</p>;
+  if (!topics.length) return <p className="insights-empty-note">Topic mastery appears once results are released.</p>;
   return <ul className="insights-topics">{topics.map(topic => {
     const low = (topic.percent ?? 0) < GAP;
     return <li key={topic.topic}>
@@ -152,7 +152,7 @@ function TopicBars({ topics }: { topics: InsightTopic[] }) {
 }
 
 const stages = [
-  { key: 'reviewed', label: 'Reviewed' }, { key: 'awaiting_review', label: 'Awaiting review' }, { key: 'processing', label: 'Processing' },
+  { key: 'reviewed', label: 'Released' }, { key: 'awaiting_review', label: 'Awaiting review' }, { key: 'processing', label: 'Processing' },
   { key: 'failed', label: 'Grading failed' }, { key: 'awaiting_grading', label: 'Not yet sent for grading' }, { key: 'not_submitted', label: 'Not submitted' },
 ] as const;
 
@@ -189,11 +189,11 @@ function StudentDetail({ student, onClose }: { student: InsightStudent; onClose:
             {topic.class_percent !== null && <b className="insights-tick" style={{ left: `${topic.class_percent}%` }} />}</div>
           {topic.percent < GAP && <small><span className="insights-status-label"><AlertTriangle size={13} />Learning focus</span></small>}
         </li>)}</ul>
-      </> : <p className="insights-empty-note">No checked work for this student yet.</p>}
+      </> : <p className="insights-empty-note">No released results for this student yet.</p>}
       <h3>Assignments</h3>
       {student.history.length ? <ul className="insights-history">{student.history.map(item => <li key={item.assignment_id}>
         <span>{item.title}<small>{shortDate(item.date)}{item.complete ? '' : ' · partly reviewed'}</small></span><strong>{pct(item.percent)}</strong>
-      </li>)}</ul> : <p className="insights-empty-note">{student.submitted ? 'Submitted work has not been checked yet.' : 'No submissions in this period.'}</p>}
+      </li>)}</ul> : <p className="insights-empty-note">{student.submitted ? 'Submitted work has not been released yet.' : 'No submissions in this period.'}</p>}
     </div>
   </Modal>;
 }
@@ -211,7 +211,7 @@ function Students({ students }: { students: InsightStudent[] }) {
         <td><button className="assignment-title" onClick={() => setSelected(student)}>{studentLabel(student)}<ArrowRight size={14} /></button><small>{student.code}{student.active ? '' : ' · former class member'}</small></td>
         <td>{student.class_name}</td><td>{student.submitted}</td>
         <td><strong>{pct(student.average)}</strong></td><td>{pct(student.method_rate)}</td><td>{pct(student.answer_rate)}</td>
-        <td>{student.gaps.length ? <span className="insights-chips">{student.gaps.map(gap => <span key={gap}>{gap}</span>)}</span> : <span className="muted">{student.average === null ? 'No checked work' : 'On track'}</span>}</td>
+        <td>{student.gaps.length ? <span className="insights-chips">{student.gaps.map(gap => <span key={gap}>{gap}</span>)}</span> : <span className="muted">{student.average === null ? 'No released results' : 'On track'}</span>}</td>
       </tr>)}</tbody>
     </table>{!visible.length && <p className="insights-empty-note">No students match your search.</p>}</div>}
     {selected && <StudentDetail student={selected} onClose={() => setSelected(null)} />}
@@ -232,25 +232,25 @@ export function InsightsPage({ onReview }: { onReview: () => void }) {
     <div className="insights-filters">
       <label>Class<select aria-label="Filter insights by class" value={classId} onChange={event => setClassId(event.target.value)}><option value="">All classes</option>{data.classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <label>Period<select aria-label="Filter insights by period" value={days} onChange={event => setDays(Number(event.target.value))}>{periods.map(period => <option key={period.days} value={period.days}>{period.label}</option>)}</select></label>
-      <span className="insights-note"><ShieldCheck size={15} />Counts only the parts you have checked</span>
+      <span className="insights-note"><ShieldCheck size={15} />Counts only results you have released</span>
       <button className="btn secondary" disabled={!data.students.length} onClick={() => { downloadInsightsCsv(data); toast.success('Insights report downloaded.'); }}><ArrowDownToLine size={16} />Export report</button>
     </div>
-    {!checked && <div className="info-banner insights-banner"><ChartNoAxesCombined size={22} /><div><strong>{summary.submissions ? 'No checked work yet.' : 'No submissions yet.'}</strong>
-      <p>{summary.submissions ? 'Scores, topics and learning gaps appear once you check parts in the marking queue. Tick “I have checked this part” and save the review.' : 'Publish a paper to a class. Submission progress appears here as students hand in their work.'}</p></div>
+    {!checked && <div className="info-banner insights-banner"><ChartNoAxesCombined size={22} /><div><strong>{summary.submissions ? 'No released results yet.' : 'No submissions yet.'}</strong>
+      <p>{summary.submissions ? 'Scores, topics and learning gaps appear once you release results. In the marking queue, check every part, then choose Approve and release.' : 'Publish a paper to a class. Submission progress appears here as students hand in their work.'}</p></div>
       {summary.submissions > 0 && <button className="btn primary" onClick={onReview}>Open marking queue<ArrowRight size={16} /></button>}</div>}
     <section className="insights-kpis" aria-label="Summary">
-      <div className="panel insights-kpi"><span>Average score</span><strong>{pct(summary.average)}</strong><small>{checked ? `From ${summary.checked_parts} checked ${summary.checked_parts === 1 ? 'part' : 'parts'}` : 'Waiting for checked work'}</small></div>
+      <div className="panel insights-kpi"><span>Average score</span><strong>{pct(summary.average)}</strong><small>{checked ? `From ${summary.reviewed} released ${summary.reviewed === 1 ? 'result' : 'results'}` : 'Waiting for released results'}</small></div>
       <div className="panel insights-kpi"><span>Method marks earned</span><strong>{pct(summary.method_rate)}</strong><small>M marks for correct working</small></div>
       <div className="panel insights-kpi"><span>Answer marks earned</span><strong>{pct(summary.answer_rate)}</strong><small>A and B marks for correct results</small></div>
       <div className="panel insights-kpi"><span>Right method, lost the answer</span><strong>{pct(summary.slips.percent)}</strong><small>{summary.slips.parts ? `${summary.slips.count} of ${summary.slips.parts} parts with both mark types` : 'No parts with both mark types yet'}</small></div>
-      <div className="panel insights-kpi"><span>Review progress</span><strong>{summary.total_parts ? pct(100 * summary.checked_parts / summary.total_parts) : '–'}</strong><small>{summary.reviewed} of {summary.submissions} submissions fully reviewed</small></div>
+      <div className="panel insights-kpi"><span>Results released</span><strong>{summary.submissions ? pct(100 * summary.reviewed / summary.submissions) : '–'}</strong><small>{summary.reviewed} of {summary.submissions} submissions released</small></div>
     </section>
     <div className="insights-board">
       <ChartCard title="Score trend" subtitle="Average score per assignment. The faint line marks 60%." className="span-2"
-        table={<table><thead><tr><th>Assignment</th><th>Class</th><th>Date</th><th>Average</th><th>Fully reviewed</th></tr></thead><tbody>{data.trend.map(row => <tr key={row.assignment_id}><td>{row.title}</td><td>{row.class_name}</td><td>{shortDate(row.date)}</td><td>{pct(row.average)}</td><td>{row.reviewed} / {row.submitted}</td></tr>)}</tbody></table>}>
+        table={<table><thead><tr><th>Assignment</th><th>Class</th><th>Date</th><th>Average</th><th>Released</th></tr></thead><tbody>{data.trend.map(row => <tr key={row.assignment_id}><td>{row.title}</td><td>{row.class_name}</td><td>{shortDate(row.date)}</td><td>{pct(row.average)}</td><td>{row.reviewed} / {row.submitted}</td></tr>)}</tbody></table>}>
         <TrendChart trend={data.trend} classes={data.classes} />
       </ChartCard>
-      <ChartCard title="Score spread" subtitle="Fully reviewed submissions by score"
+      <ChartCard title="Score spread" subtitle="Released results by score"
         table={<table><thead><tr><th>Score</th><th>Submissions</th></tr></thead><tbody>{data.distribution.map(bin => <tr key={bin.label}><td>{bin.label}</td><td>{bin.count}</td></tr>)}</tbody></table>}>
         <Distribution bins={data.distribution} />
       </ChartCard>
@@ -258,14 +258,14 @@ export function InsightsPage({ onReview }: { onReview: () => void }) {
         table={<table><thead><tr><th>Topic</th><th>Score</th><th>Marks</th><th>Students below {GAP}%</th></tr></thead><tbody>{data.topics.map(topic => <tr key={topic.topic}><td>{topic.topic}</td><td>{pct(topic.percent)}</td><td>{topic.earned}/{topic.available}</td><td>{topic.below}</td></tr>)}</tbody></table>}>
         <TopicBars topics={data.topics} />
       </ChartCard>
-      <section className="panel insights-card span-2"><div className="panel-heading"><div><h2>Common mistakes</h2><p>Marking points most often missed in checked work</p></div></div>
+      <section className="panel insights-card span-2"><div className="panel-heading"><div><h2>Common mistakes</h2><p>Marking points most often missed in released results</p></div></div>
         {data.mistakes.length ? <ol className="insights-mistakes">{data.mistakes.map(mistake => <li key={mistake.paper + mistake.number + mistake.code + mistake.criterion}>
           <div className="insights-mistake-head"><span className="insights-code">{mistake.code}</span><strong>{mistake.criterion}</strong><span className="insights-rate">{mistake.missed} of {mistake.assessed} missed</span></div>
           <div className="insights-track thin"><span className="is-low" style={{ width: `${mistake.rate}%` }} /></div>
           <p>Q{mistake.number}, {mistake.paper}: {mistake.question}</p>
           <small>{mistake.topics.join(' / ')} · {mistake.students.join(', ')}{mistake.missed > mistake.students.length ? ` and ${mistake.missed - mistake.students.length} more` : ''}</small>
           {mistake.feedback.map(note => <blockquote key={note}>{note}</blockquote>)}
-        </li>)}</ol> : <p className="insights-empty-note">{checked ? 'No marking points missed in checked work.' : 'Common mistakes appear once parts are checked.'}</p>}
+        </li>)}</ol> : <p className="insights-empty-note">{checked ? 'No marking points missed in released results.' : 'Common mistakes appear once results are released.'}</p>}
       </section>
     </div>
     <section className="panel insights-card"><div className="panel-heading"><div><h2>Submission status</h2><p>Every assignment in this period, by student</p></div></div><StatusBars status={data.status} /></section>

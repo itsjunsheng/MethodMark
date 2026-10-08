@@ -49,6 +49,7 @@ button:disabled > .assignment-class-check { background: #b7c4b8; border-color: #
 .assignment-class-menu .assignment-class-assigned { color: #557660; }
 .assignment-detail .class-help { margin: 20px 0 10px; }
 .assignment-detail .text-link { margin-top: 12px; }
+.assignment-detail .modal-actions { border-top: 0; }
 .assignment-student-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin: 30px 0 10px; }
 .assignment-student-heading h3 { margin-right: auto; font-size: 16px; }
 .assignment-student-heading select { font-size: 13px; }

@@ -1,6 +1,7 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import type { TutorClass } from '../types/classes';
+import { useMenuLayout } from '../lib/useMenuLayout';
 
 type Props = {
   classes: TutorClass[];
@@ -12,39 +13,13 @@ type Props = {
 
 export function ClassSelect({ classes, assigned, selected, disabled, onChange }: Props) {
   const [open, setOpen] = useState(false);
-  const [menuLayout, setMenuLayout] = useState({ maxHeight: 260, above: false });
   const root = useRef<HTMLDivElement>(null);
+  const menuLayout = useMenuLayout(open, root);
   const trigger = useRef<HTMLButtonElement>(null);
   const id = useId();
   const summary = selected.length === 1 ? classes.find(item => item.id === selected[0])?.name
     : selected.length ? selected.length + ' classes selected'
       : classes.every(item => assigned.includes(item.id)) ? 'All classes already assigned' : 'Select classes';
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    const field = root.current;
-    const modal = field?.closest('.modal');
-    if (!field || !modal) return;
-    // Keep the menu inside the visible dialog so it cannot enlarge its scroll area.
-    const position = () => {
-      const fieldBounds = field.getBoundingClientRect();
-      const modalBounds = modal.getBoundingClientRect();
-      const below = Math.min(modalBounds.bottom, window.innerHeight) - fieldBounds.bottom - 12;
-      const above = fieldBounds.top - Math.max(modalBounds.top, 0) - 12;
-      const openAbove = below < 160 && above > below;
-      setMenuLayout({ maxHeight: Math.max(0, Math.min(260, openAbove ? above : below)), above: openAbove });
-    };
-    position();
-    const observer = new ResizeObserver(position);
-    observer.observe(modal);
-    window.addEventListener('resize', position);
-    modal.addEventListener('scroll', position, { passive: true });
-    return () => {
-      observer.disconnect();
-      window.removeEventListener('resize', position);
-      modal.removeEventListener('scroll', position);
-    };
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;

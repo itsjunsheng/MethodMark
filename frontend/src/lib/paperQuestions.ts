@@ -2,6 +2,8 @@ import { randomColour } from './colours';
 import type { Paper, Question } from '../data';
 import type { BankQuestion, ContentBlock } from '../types/questionBank';
 
+export const MAX_PAPER_QUESTIONS = 30;
+
 const blockText = (blocks: ContentBlock[]) => blocks
   .map(block => block.type === 'text' ? block.text : block.alt_text)
   .join('\n');
@@ -39,6 +41,7 @@ export function questionMarks(question: Question): number {
 }
 
 export function createSamplePaper(bank: BankQuestion[], title: string, duration: number): Paper {
+  if (bank.length > MAX_PAPER_QUESTIONS) throw new Error(`A paper can contain at most ${MAX_PAPER_QUESTIONS} questions.`);
   const levels = [...new Set(bank.map(question => `Secondary ${question.school_year} (${question.subject_level})`))];
   return {
     id: crypto.randomUUID(),

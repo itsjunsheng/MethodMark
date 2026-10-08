@@ -8,6 +8,69 @@ test.beforeEach(async ({ page }) => { await mockAuth(page, true); });
 
 const endpoint = '**/api/v1/sample-paper/questions';
 
+const largeBank = Array.from({ length: 40 }, (_, index) => ({
+  ...questions[0], id: `20000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+  school_year: 3, subject_level: 'G3', difficulty: 'medium', topics: ['Topic ' + String(index + 1).padStart(2, '0')],
+}));
+
+for (const count of ['', '30']) {
+  test(`papers are capped at 30 questions with ${count || 'blank'} count`, async ({ page }) => {
+    const db = await mockAssignments(page);
+    await page.route(endpoint, route => route.fulfill({ json: largeBank }));
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Create practice paper', exact: true }).click();
+    await selectPaperScope(page);
+    const input = page.getByLabel('Number of questions');
+    const generate = page.getByRole('button', { name: 'Generate sample paper' });
+    await expect(input).toHaveAttribute('max', '30');
+    await input.fill('31');
+    await expect(page.getByRole('alert')).toContainText('at most 30 questions');
+    await expect(generate).toBeDisabled();
+    await input.fill(count);
+    await expect(page.locator('.builder-readiness')).toBeEmpty();
+    await expect(generate).toBeEnabled();
+    await generate.click();
+    await expect(page.locator('.exam-question')).toHaveCount(30);
+    expect(db.papers[0].questions_snapshot).toHaveLength(30);
+    expect(new Set(db.papers[0].questions_snapshot.map(question => question.id)).size).toBe(30);
+  });
+}
+
+for (const viewport of [{ width: 1440, height: 1000 }, { width: 800, height: 620 }, { width: 390, height: 740 }]) {
+  test(`long topic menu scrolls internally without expanding the form at ${viewport.width}px`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.route(endpoint, route => route.fulfill({ json: largeBank }));
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Create practice paper', exact: true }).click();
+    await selectPaperScope(page);
+    const trigger = page.getByRole('button', { name: /^Topics/ });
+    await trigger.scrollIntoViewIfNeeded();
+    const content = page.locator('.builder-content');
+    const measurements = () => content.evaluate(el => ({ height: el.clientHeight, scrollHeight: el.scrollHeight, top: el.scrollTop }));
+    const before = await measurements();
+    await trigger.click();
+    const menu = page.getByRole('group', { name: 'Available topics' });
+    await expect(menu).toBeVisible();
+    expect(await measurements()).toEqual(before);
+    const menuBox = (await menu.boundingBox())!, contentBox = (await content.boundingBox())!;
+    expect(menuBox.y).toBeGreaterThanOrEqual(contentBox.y);
+    expect(menuBox.y + menuBox.height).toBeLessThanOrEqual(contentBox.y + contentBox.height);
+    const options = menu.locator('.topics-select-options');
+    expect(await options.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+    await options.hover();
+    await page.mouse.wheel(0, 3000);
+    await expect.poll(() => options.evaluate(el => Math.ceil(el.scrollTop + el.clientHeight) >= el.scrollHeight)).toBe(true);
+    await page.mouse.wheel(0, 3000);
+    expect(await measurements()).toEqual(before);
+    await expect(menu.getByRole('checkbox', { name: 'Topic 40', exact: true })).toBeInViewport();
+    await menu.getByRole('checkbox', { name: 'Topic 40', exact: true }).uncheck();
+    await page.getByRole('dialog').screenshot({ path: `test-results/topics-contained-${viewport.width}.png` });
+    await page.keyboard.press('Escape');
+    await expect(trigger).toBeFocused();
+    expect(await measurements()).toEqual(before);
+  });
+}
+
 test('required selections filter the paper while optional fields can stay blank', async ({ page }) => {
   await page.route(endpoint, route => route.fulfill({ json: questions }));
   await page.goto('/');
@@ -16,7 +79,7 @@ test('required selections filter the paper while optional fields can stay blank'
   await expect(page.getByRole('combobox', { name: 'School year', exact: true })).toBeDisabled();
   await expect(page.getByRole('combobox', { name: 'Subject level', exact: true })).toBeDisabled();
   await selectPaperScope(page);
-  await expect(page.getByText('1 matching question available', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 matching question available', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('checkbox', { name: 'Pythagoras theorem', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Generate sample paper' }).click();
   await expect(page.locator('.exam-question')).toHaveCount(1);
@@ -37,9 +100,9 @@ test('topics use any selected topic and combine with difficulty; parts stay toge
   await expect(page.getByRole('checkbox', { name: 'Linear equations', exact: true })).toBeChecked();
   await page.getByRole('button', { name: /^Topics/ }).click();
   await expect(page.getByRole('button', { name: /^Topics/ })).toContainText('All topics');
-  await expect(page.getByText('1 matching question available', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 matching question available', { exact: true })).toHaveCount(0);
   await selectDifficulty(page, 'medium');
-  await expect(page.getByText('1 matching question available', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 matching question available', { exact: true })).toHaveCount(0);
   await selectDifficulty(page, 'easy');
   await page.getByRole('button', { name: /^Topics/ }).click();
   await page.getByRole('checkbox', { name: 'Linear equations', exact: true }).uncheck();
@@ -138,7 +201,7 @@ test('a requested count samples unique matching questions without changing the s
   await page.getByRole('button', { name: 'Close dialog' }).click();
   await page.getByRole('button', { name: 'Create practice paper', exact: true }).click();
   await selectPaperScope(page);
-  await expect(page.getByText('5 matching questions available', { exact: true })).toBeVisible();
+  await expect(page.getByText('5 matching questions available', { exact: true })).toHaveCount(0);
 });
 
 for (const width of [1440, 390]) {

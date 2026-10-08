@@ -1,11 +1,11 @@
 import { useToast, useToastError } from './Toast';
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { BookOpen, CheckCircle2, FileText, Sparkles } from 'lucide-react';
+import { BookOpen, FileText, Sparkles } from 'lucide-react';
 import type { Paper } from '../data';
 import type { BankQuestion } from '../types/questionBank';
 import { fetchQuestions } from '../api/questions';
-import { createSamplePaper } from '../lib/paperQuestions';
+import { createSamplePaper, MAX_PAPER_QUESTIONS } from '../lib/paperQuestions';
 import { TopicSelect } from './TopicSelect';
 import './PaperBuilderForm.css';
 
@@ -68,9 +68,10 @@ export function PaperBuilderForm({ onClose, onSave }: { onClose: () => void; onS
   const matches = levelQuestions.filter(question => question.difficulty === difficulty
     && (allTopicsSelected || question.topics.some(topic => topics.includes(topic))));
   const hasSelection = !!(subject && schoolYear && subjectLevel);
-  const count = questionCount === '' ? matches.length : Number(questionCount);
+  const count = questionCount === '' ? Math.min(matches.length, MAX_PAPER_QUESTIONS) : Number(questionCount);
   const countError = questionCount !== '' && (!Number.isInteger(count) || count < 1)
     ? 'Enter a whole number of at least 1.'
+    : count > MAX_PAPER_QUESTIONS ? `A paper can contain at most ${MAX_PAPER_QUESTIONS} questions.`
     : hasSelection && matches.length > 0 && count > matches.length
       ? `Only ${matches.length} matching ${matches.length === 1 ? 'question is' : 'questions are'} available. Choose a smaller number or broaden your selections.`
       : '';
@@ -149,7 +150,7 @@ export function PaperBuilderForm({ onClose, onSave }: { onClose: () => void; onS
           <input value={title} onChange={event => setTitle(event.target.value)} placeholder="e.g. Weekly maths practice" maxLength={100} />
         </label>
         <label><span>Number of questions <span className="optional">optional</span></span>
-          <input type="number" min={1} step={1} value={questionCount} placeholder="All matching questions"
+          <input type="number" min={1} max={MAX_PAPER_QUESTIONS} step={1} value={questionCount} placeholder={`Up to ${MAX_PAPER_QUESTIONS} questions`}
             aria-describedby={countError ? 'builder-count-help' : undefined} aria-invalid={!!countError}
             onChange={event => setQuestionCount(event.target.value)} />
         </label>
@@ -164,10 +165,8 @@ export function PaperBuilderForm({ onClose, onSave }: { onClose: () => void; onS
     </div>
     <div className="builder-footer">
     <div className="builder-readiness">
-      {canGenerate && <CheckCircle2 size={17} aria-hidden="true" />}
-      {hasSelection && !loading && !loadError ? <p className={`builder-availability ${matches.length ? '' : 'validation-text'}`} role="status">
-      {matches.length ? `${matches.length} matching ${matches.length === 1 ? 'question' : 'questions'} available`
-        : !topics.length && availableTopics.length > 0 ? 'Select at least one topic to generate a paper.'
+      {hasSelection && !loading && !loadError ? !matches.length && <p className="builder-availability validation-text" role="status">
+      {!topics.length && availableTopics.length > 0 ? 'Select at least one topic to generate a paper.'
           : 'No questions match these selections. Try another topic or difficulty.'}
       </p> : !loading && !loadError && <p className="builder-hint">Select a subject, school year and level to get started.</p>}
     </div>

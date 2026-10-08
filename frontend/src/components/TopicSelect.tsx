@@ -1,16 +1,18 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { useMenuLayout } from '../lib/useMenuLayout';
 
 type Props = { options: string[]; selected: string[]; disabled: boolean; onChange: (topics: string[]) => void };
 
 export function TopicSelect({ options, selected, disabled, onChange }: Props) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const menuLayout = useMenuLayout(open, root);
   const trigger = useRef<HTMLButtonElement>(null);
   const id = useId();
   const summary = !selected.length ? 'Select topics' : selected.length === options.length ? 'All topics'
     : selected.length === 1 ? selected[0] : `${selected.length} topics selected`;
-  const close = () => { setOpen(false); trigger.current?.focus(); };
+  const close = () => { setOpen(false); trigger.current?.focus({ preventScroll: true }); };
 
   useEffect(() => {
     if (!open) return;
@@ -32,7 +34,8 @@ export function TopicSelect({ options, selected, disabled, onChange }: Props) {
       onClick={() => setOpen(value => !value)}>
       <span id={`${id}-summary`} title={selected.join(', ') || summary}>{summary}</span><ChevronDown size={15} />
     </button>
-    {open && <div id={`${id}-options`} className="topics-select-menu" role="group" aria-label="Available topics">
+    {open && <div id={`${id}-options`} className="topics-select-menu" role="group" aria-label="Available topics"
+      data-side={menuLayout.above ? 'above' : 'below'} style={{ maxHeight: menuLayout.maxHeight }}>
       <div className="topics-select-options">{options.map(topic => <label key={topic}>
         <input type="checkbox" checked={selected.includes(topic)} onChange={event =>
           onChange(event.target.checked ? [...selected, topic] : selected.filter(value => value !== topic))} />
